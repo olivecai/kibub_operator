@@ -90,8 +90,9 @@ def build_record_command(
         f"--dataset.fps={fps}",
         "--dataset.reset_time_s=5",
         "--dataset.episode_time_s=15",
-        
+
         "--dataset.push_to_hub=true",
+        "--display_data=false"
     ]
 
     # Attach any camera indices (OpenCV device IDs)
