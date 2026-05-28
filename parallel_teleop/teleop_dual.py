@@ -86,8 +86,11 @@ def build_record_command(
         f"--teleop.id={leader['id']}",
         f"--dataset.repo_id={repo_id}",
         f"--dataset.num_episodes={num_episodes}",
-        f"--dataset.task={task}",
+        f"--dataset.single_task={task}",
         f"--dataset.fps={fps}",
+        "--dataset.reset_time_s=5",
+        "--dataset.episode_time_s=15",
+        
         "--dataset.push_to_hub=true",
     ]
 
