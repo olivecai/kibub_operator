@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """
-XLeRobot Dual-Arm Teleoperation
-================================
-Wraps lerobot-teleoperate in subprocesses — one per arm pair.
-Relies entirely on lerobot's proven teleoperation code.
+XLeRobot Dual-Arm Teleoperation + Data Collection
+===================================================
+Wraps lerobot-teleoperate (or lerobot-record) in subprocesses — one per arm pair.
 
 Modes
 -----
@@ -13,9 +12,18 @@ single_left  — leader_left  → follower_right  AND  leader_left  → follower
 
 Usage
 -----
+# Pure teleoperation (no recording)
 python teleop_dual.py --mode dual
-python teleop_dual.py --mode single_right
-python teleop_dual.py --mode single_left
+
+# Record a dataset (saves locally, then push to HF)
+python teleop_dual.py --mode dual --record \
+    --repo-id your-hf-username/my-task \
+    --task "Pick up the red block" \
+    --num-episodes 50 \
+    --cameras camera_right:0 camera_left:1
+
+# Push an already-recorded local dataset to HuggingFace
+python teleop_dual.py --push-only --repo-id your-hf-username/my-task
 """
 
 import argparse
@@ -33,7 +41,7 @@ ARMS = {
     "follower_left":  {"port": "/dev/follower_left",  "id": "test_follower_left"},
 }
 
-# ── Mode definitions: list of (leader_key, follower_key) pairs ────────────────
+# ── Mode definitions: list of (leader_key, follower_key) pairs ───────────────
 
 MODES = {
     "dual": [
@@ -51,7 +59,8 @@ MODES = {
 }
 
 
-def build_command(leader_key: str, follower_key: str) -> list[str]:
+def build_teleop_command(leader_key: str, follower_key: str) -> list[str]:
+    """Pure teleoperation — no data saved."""
     leader   = ARMS[leader_key]
     follower = ARMS[follower_key]
     return [
@@ -65,50 +74,58 @@ def build_command(leader_key: str, follower_key: str) -> list[str]:
     ]
 
 
-def main():
-    parser = argparse.ArgumentParser(description="XLeRobot dual-arm teleoperation")
-    parser.add_argument(
-        "--mode",
-        choices=list(MODES.keys()),
-        default="dual",
-        help="Teleoperation mode (default: dual)",
-    )
-    args = parser.parse_args()
+def build_record_command(
+    leader_key: str,
+    follower_key: str,
+    repo_id: str,
+    task: str,
+    num_episodes: int,
+    cameras: dict[str, int],   # {name: cv2_index}
+    fps: int,
+    episode_time_s: int,
+    reset_time_s: int,
+    local_dir: str,
+) -> list[str]:
+    """
+    Record episodes using lerobot-record.
 
-    pairs = MODES[args.mode]
-    processes = []
+    lerobot-record saves every episode as a Parquet + video file under
+    ~/.cache/huggingface/lerobot/<repo_id>/ by default (override with
+    --dataset.root). When finished it can auto-push to HuggingFace Hub.
+    """
+    leader   = ARMS[leader_key]
+    follower = ARMS[follower_key]
 
-    print(f"\nStarting teleoperation — mode: {args.mode}")
-    for leader_key, follower_key in pairs:
-        cmd = build_command(leader_key, follower_key)
-        print(f"  {leader_key} → {follower_key}")
-        print(f"  $ {' '.join(cmd)}\n")
-        proc = subprocess.Popen(cmd)
-        processes.append(proc)
-        time.sleep(0.5)  # slight stagger to avoid serial bus collisions at startup
+    cmd = [
+        "lerobot-record",
+        # ── Robot ──────────────────────────────────────────────────────
+        f"--robot.type=so101_follower",
+        f"--robot.port={follower['port']}",
+        f"--robot.id={follower['id']}",
+        # ── Teleop ─────────────────────────────────────────────────────
+        f"--teleop.type=so101_leader",
+        f"--teleop.port={leader['port']}",
+        f"--teleop.id={leader['id']}",
+        # ── Dataset ────────────────────────────────────────────────────
+        f"--dataset.repo_id={repo_id}",
+        f"--dataset.single_task={task}",
+        f"--dataset.num_episodes={num_episodes}",
+        f"--dataset.fps={fps}",
+        f"--dataset.root={local_dir}",
+        # ── Episode timing ─────────────────────────────────────────────
+        f"--dataset.episode_time_s={episode_time_s}",
+        f"--dataset.reset_time_s={reset_time_s}",
+        # ── Push to Hub after recording ────────────────────────────────
+        "--dataset.push_to_hub=true",
+        "--dataset.video=true",
+    ]
 
-    print("Press Ctrl-C to stop all arms.\n")
-
-    def shutdown(sig, frame):
-        print("\nStopping all teleop processes...")
-        for proc in processes:
-            proc.terminate()
-        for proc in processes:
-            proc.wait()
-        print("Done.")
-        sys.exit(0)
-
-    signal.signal(signal.SIGINT, shutdown)
-    signal.signal(signal.SIGTERM, shutdown)
-
-    # Wait for any process to exit unexpectedly
-    while True:
-        for proc in processes:
-            if proc.poll() is not None:
-                print(f"A teleop process exited unexpectedly (code {proc.returncode}). Stopping all.")
-                shutdown(None, None)
-        time.sleep(1)
-
-
-if __name__ == "__main__":
-    main()
+    # Attach cameras: --robot.cameras.[name].type=opencv
+    #                 --robot.cameras.[name].index=N
+    for cam_name, cam_index in cameras.items():
+        cmd += [
+            f"--robot.cameras.{cam_name}.type=opencv",
+            f"--robot.cameras.{cam_name}.index={cam_index}",
+            f"--robot.cameras.{cam_name}.fps={fps}",
+            f"--robot.cameras.{cam_name}.width=640",
+            f"--robot.cameras.{cam_name}.height
