@@ -78,7 +78,7 @@ class BaseTeleopMode(ABC):
 
     def on_start(self):
         """Enable torque on all connected followers."""
-        for follower in ("follower_right", "follower_left"):
+        for follower in ("test_follower_right", "test_follower_left"):
             try:
                 self.dm.write_torque(follower, True)
             except RuntimeError:
@@ -87,7 +87,7 @@ class BaseTeleopMode(ABC):
 
     def on_stop(self):
         """Disable torque on all connected followers."""
-        for follower in ("follower_right", "follower_left"):
+        for follower in ("test_follower_right", "test_follower_left"):
             try:
                 self.dm.write_torque(follower, False)
             except RuntimeError:
@@ -132,11 +132,11 @@ class DualLeaderMode(BaseTeleopMode):
         super().on_start()
 
     def step(self):
-        pos_r = self._safe_read("leader_right")
-        pos_l = self._safe_read("leader_left")
+        pos_r = self._safe_read("test_leader_right")
+        pos_l = self._safe_read("test_leader_left")
 
-        self._safe_write("follower_right", pos_r)
-        self._safe_write("follower_left",  pos_l)
+        self._safe_write("test_follower_right", pos_r)
+        self._safe_write("test_follower_left",  pos_l)
 
         self._step_count += 1
         if self._step_count % 500 == 0:
@@ -172,8 +172,8 @@ class SingleLeaderBothMode(BaseTeleopMode):
     def step(self):
         pos = self._safe_read(self.leader_arm)
 
-        self._safe_write("follower_right", pos)
-        self._safe_write("follower_left",  pos)
+        self._safe_write("test_follower_right", pos)
+        self._safe_write("test_follower_left",  pos)
 
         self._step_count += 1
 
@@ -201,8 +201,8 @@ class MirrorMode(BaseTeleopMode):
         pos_r  = self._safe_read("leader_right")
         pos_l  = mirror_positions(pos_r)
 
-        self._safe_write("follower_right", pos_r)
-        self._safe_write("follower_left",  pos_l)
+        self._safe_write("test_follower_right", pos_r)
+        self._safe_write("test_follower_left",  pos_l)
 
         self._step_count += 1
         if self._step_count % 500 == 0:

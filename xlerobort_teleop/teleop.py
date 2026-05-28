@@ -110,10 +110,10 @@ def run(args, cfg: dict):
     devices_cfg = cfg.get("devices", {})
 
     ports = {
-        "leader_right":   devices_cfg.get("leader_right",   "/dev/ttyACM3"),
-        "leader_left":    devices_cfg.get("leader_left",    None),          # optional
-        "follower_right": devices_cfg.get("follower_right", "/dev/ttyACM1"),
-        "follower_left":  devices_cfg.get("follower_left",  "/dev/ttyACM0"),
+        "leader_right":   devices_cfg.get("test_leader_right",   "/dev/leader_right"),
+        "leader_left":    devices_cfg.get("test_leader_left",    "/dev/leader_left"),          # optional
+        "follower_right": devices_cfg.get("test_follower_right", "/dev/follower_right"),
+        "follower_left":  devices_cfg.get("test_follower_left",  "/dev/follower_left"),
     }
 
     control_cfg = cfg.get("control", {})
