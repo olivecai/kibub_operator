@@ -157,10 +157,7 @@ def record(args):
             left_action  = left_leader.get_action()
 
             # Flatten to numpy vectors
-            print("right_obs keys:", right_obs.keys())
-            print("left_obs keys:", left_obs.keys())
-            print("right_obs values:", right_obs.values())
-            print("left_obs values:", left_obs.values())
+    
             right_state_vec = np.array(list(right_obs.values()), dtype=np.float32)
             left_state_vec  = np.array(list(left_obs.values()), dtype=np.float32)
             right_action_vec = np.array(list(right_action.values()),                      dtype=np.float32)
