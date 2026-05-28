@@ -1,0 +1,13 @@
+# XLeRobot — Dual Leader Configuration
+# ======================================
+# Use with: python teleop.py --mode dual --config configs/dual_leader.yaml
+
+devices:
+  leader_right:   /dev/ttyACM3
+  leader_left:    /dev/ttyACM2   # ← set your left leader port here
+  follower_right: /dev/ttyACM1
+  follower_left:  /dev/ttyACM0
+
+control:
+  fps:      50
+  baudrate: 1000000

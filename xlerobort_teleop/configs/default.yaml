@@ -1,0 +1,24 @@
+# XLeRobot Dual-Arm Teleoperation — Default Configuration
+# =========================================================
+# Copy this file and pass --config my_config.yaml to override settings.
+
+devices:
+  # Serial ports — adjust if your OS assigns different tty paths
+  leader_right:   /dev/ttyACM3   # Right SO-101 leader arm
+  leader_left:    ~              # Left SO-101 leader arm (null = not connected)
+  follower_right: /dev/ttyACM1   # Right SO-101 follower arm
+  follower_left:  /dev/ttyACM0   # Left SO-101 follower arm
+
+control:
+  fps:      50         # Control-loop frequency in Hz (50 is safe; up to ~100 on fast hardware)
+  baudrate: 1000000    # Dynamixel baud rate (default for XL330)
+
+# Safety limits (not yet enforced — placeholder for future velocity/torque guards)
+safety:
+  max_position_delta: 200    # Max encoder ticks change per tick (future use)
+  torque_limit:        800   # PWM / torque limit (future use)
+
+# Logging
+logging:
+  level: INFO       # DEBUG | INFO | WARNING | ERROR
+  log_file: logs/teleop.log

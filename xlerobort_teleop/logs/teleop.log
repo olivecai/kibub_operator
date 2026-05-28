@@ -1,0 +1,22 @@
+03:57:49 [INFO] teleop: Loaded config from configs/default.yaml
+03:57:49 [INFO] teleop: Mode: single_right  |  FPS: 50  |  Baud: 1000000
+03:57:49 [INFO] teleop: Ports → {'leader_right': '/dev/ttyACM3', 'leader_left': None, 'follower_right': '/dev/ttyACM1', 'follower_left': '/dev/ttyACM0'}
+03:57:49 [INFO] core.device_manager: [STUB] connect → /dev/ttyACM3
+03:57:49 [INFO] core.device_manager: Connected: leader_right @ /dev/ttyACM3
+03:57:49 [INFO] core.device_manager: [STUB] connect → /dev/ttyACM1
+03:57:49 [INFO] core.device_manager: Connected: follower_right @ /dev/ttyACM1
+03:57:49 [INFO] core.device_manager: [STUB] connect → /dev/ttyACM0
+03:57:49 [INFO] core.device_manager: Connected: follower_left @ /dev/ttyACM0
+03:57:49 [INFO] teleop: Starting teleoperation — press Ctrl-C to stop.
+03:57:49 [INFO] core.teleop_modes: SingleLeaderBothMode started.
+03:57:49 [INFO] core.teleop_modes: Single-leader mode: leader_right → follower_right + follower_left
+03:58:15 [INFO] teleop: Shutdown signal received — stopping teleoperation loop…
+03:58:15 [INFO] teleop: Shutting down devices…
+03:58:15 [INFO] core.teleop_modes: SingleLeaderBothMode stopped after 1314 steps.
+03:58:15 [INFO] core.device_manager: [STUB] disconnect → /dev/ttyACM3
+03:58:15 [INFO] core.device_manager: Disconnected: leader_right
+03:58:15 [INFO] core.device_manager: [STUB] disconnect → /dev/ttyACM1
+03:58:15 [INFO] core.device_manager: Disconnected: follower_right
+03:58:15 [INFO] core.device_manager: [STUB] disconnect → /dev/ttyACM0
+03:58:15 [INFO] core.device_manager: Disconnected: follower_left
+03:58:15 [INFO] teleop: Done.
