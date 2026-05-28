@@ -1,129 +1,99 @@
 """
 Calibration
 ===========
-Wraps lerobot's calibration workflow for the XLeRobot SO-101 arms.
+Uses lerobot's SOLeader / SOFollower classes directly,
+which handle the full interactive calibration flow for SO-101 Feetech arms.
 
 Run via:
     python teleop.py --mode calibrate
-or directly:
-    python -m core.calibration
 """
 
 from __future__ import annotations
 
 import logging
 import sys
-from pathlib import Path
-from typing import Optional
 
 log = logging.getLogger(__name__)
 
-# Arms to calibrate (in order)
-_ARM_ROLES = [
-    ("leader_right",   "/dev/ttyACM3", "leader"),
-    ("leader_left",    None,           "leader"),   # port from config / skipped if None
-    ("follower_right", "/dev/ttyACM1", "follower"),
-    ("follower_left",  "/dev/ttyACM0", "follower"),
+# Arm definitions: (config_id, port, role)
+# role is "leader" or "follower"
+_ARMS = [
+    ("test_leader_right",   "/dev/leader_right",   "leader"),
+    ("test_leader_left",    "/dev/leader_left",    "leader"),
+    ("test_follower_right", "/dev/follower_right", "follower"),
+    ("test_follower_left",  "/dev/follower_left",  "follower"),
 ]
-
-_CALIB_DIR = Path("configs/calibration")
-
-
-def _try_import_lerobot():
-    try:
-        from lerobot.motors.dynamixel import DynamixelMotorsBus
-        return True
-    except ImportError:
-        return False
 
 
 def run_calibration(cfg: dict):
     """
-    Interactive calibration wizard.
-    Iterates through each arm, runs lerobot's built-in calibration,
-    and saves the result to configs/calibration/<arm_name>.json.
+    Interactive calibration for all four SO-101 arms using lerobot's
+    built-in SOLeader / SOFollower calibration flow.
     """
-    _CALIB_DIR.mkdir(parents=True, exist_ok=True)
-
-    if not _try_import_lerobot():
-        log.error(
-            "lerobot is not installed. "
-            "Install it with:  pip install lerobot\n"
-            "Then re-run calibration."
-        )
+    try:
+        from lerobot.motors import MotorNormMode
+        from lerobot.motors.feetech import FeetechMotorsBus
+        from lerobot.robots.so_follower.so_follower import SOFollower
+        from lerobot.robots.so_follower.config_so_follower import SOFollowerRobotConfig
+        from lerobot.teleoperators.so_leader.so_leader import SOLeader
+        from lerobot.teleoperators.so_leader.config_so_leader import SOLeaderTeleopConfig
+    except ImportError as e:
+        log.error(f"lerobot import failed: {e}\nInstall with: pip install lerobot")
         sys.exit(1)
 
-    # Pull overridden ports from config
+    # Allow config overrides
     devices_cfg = cfg.get("devices", {})
-    arm_list = [
-        (name, devices_cfg.get(name, default_port), role)
-        for name, default_port, role in _ARM_ROLES
+    arms = [
+        (
+            devices_cfg.get(f"id_{role}_{side}", arm_id),
+            devices_cfg.get(f"{role}_{side}", port),
+            role,
+        )
+        for arm_id, port, role in _ARMS
+        for side in []  # unpacked below
     ]
+    # Rebuild cleanly with config overrides
+    arms = []
+    for arm_id, port, role in _ARMS:
+        key = arm_id.replace("test_", "")          # e.g. "leader_right"
+        arms.append((
+            cfg.get("calibration_ids", {}).get(key, arm_id),
+            devices_cfg.get(key, port),
+            role,
+        ))
 
     print("\n" + "=" * 60)
-    print("  XLeRobot SO-101 Calibration Wizard")
+    print("  XLeRobot SO-101 Calibration Wizard (Feetech STS3215)")
     print("=" * 60)
-    print("You will be guided through calibrating each arm.")
-    print("Follow the prompts to move joints to their limits.\n")
+    print("Each arm will be calibrated in sequence.")
+    print("Follow the on-screen prompts to move each joint.\n")
 
-    for arm_name, port, role in arm_list:
-        if port is None:
-            ans = input(f"\nSkip {arm_name} (no port configured)? [Y/n] ").strip().lower()
-            if ans != "n":
-                print(f"  → Skipping {arm_name}")
-                continue
-            port = input(f"  Enter serial port for {arm_name}: ").strip()
-
-        calib_path = _CALIB_DIR / f"{arm_name}.json"
+    for arm_id, port, role in arms:
+        ans = input(f"\nCalibrate '{arm_id}' ({role}) @ {port}? [Y/n] ").strip().lower()
+        if ans == "n":
+            print(f"  → Skipping {arm_id}")
+            continue
 
         print(f"\n{'─'*50}")
-        print(f"  Calibrating: {arm_name}  ({role})  @  {port}")
-        print(f"  Output:      {calib_path}")
+        print(f"  {arm_id}  ({role})  →  {port}")
         print(f"{'─'*50}")
 
-        _calibrate_arm(arm_name=arm_name, port=port, role=role, output=calib_path)
-
-    print("\n✓ Calibration complete.")
-    print(f"  Results saved to: {_CALIB_DIR.resolve()}\n")
-
-
-def _calibrate_arm(arm_name: str, port: str, role: str, output: Path):
-    """
-    Run lerobot's calibration for a single arm.
-    This mimics what lerobot's `record` script does internally.
-    """
-    try:
-        
-        from lerobot.motors.dynamixel import DynamixelMotorsBus
-    except ImportError as e:
-        log.error(f"lerobot import failed: {e}")
-        return
-
-    from core.device_manager import SO101_MOTORS
-
-    bus = DynamixelMotorsBus(port=port, motors=SO101_MOTORS)
-
-    try:
-        bus.connect()
-        log.info(f"Connected to {arm_name} for calibration.")
-
-        # lerobot exposes run_arm_calibration for manual homing
         try:
-            from lerobot.common.robot_devices.robots.manipulator import (
-                run_arm_calibration,
-            )
-            calibration = run_arm_calibration(bus, robot_type="so101", arm_name=arm_name, arm_type=role)
-        except ImportError:
-            # Older lerobot API — fall back to built-in calibration
-            log.warning("run_arm_calibration not found; using bus.run_full_calibration()")
-            calibration = bus.run_full_calibration()
+            if role == "leader":
+                config = SOLeaderTeleopConfig(port=port, id=arm_id)
+                arm = SOLeader(config)
+            else:
+                config = SOFollowerRobotConfig(port=port, id=arm_id)
+                arm = SOFollower(config)
 
-        # Persist calibration
-        import json
-        output.parent.mkdir(parents=True, exist_ok=True)
-        with open(output, "w") as f:
-            json.dump(calibration, f, indent=2)
-        log.info(f"Calibration saved → {output}")
+            # connect(calibrate=True) triggers the interactive calibration flow
+            # if no calibration file exists, or lets you re-run it
+            arm.connect(calibrate=True)
+            arm.disconnect()
+            print(f"  ✓ {arm_id} calibrated.")
 
-    finally:
-        bus.disconnect()
+        except Exception as e:
+            log.error(f"Calibration failed for {arm_id}: {e}")
+            print(f"  ✗ {arm_id} failed — check connection and try again.")
+
+    print("\n✓ Calibration session complete.\n")

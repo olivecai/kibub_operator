@@ -1,9 +1,8 @@
 """
 DeviceManager
 =============
-Wraps lerobot's Motor Bus objects for each SO-101 arm.
-Falls back to a minimal stub if lerobot is not importable,
-so the rest of the code can be unit-tested without hardware.
+Wraps lerobot's FeetechMotorsBus for each SO-101 arm.
+Falls back to a minimal stub if lerobot is not importable.
 """
 
 from __future__ import annotations
@@ -17,7 +16,7 @@ log = logging.getLogger(__name__)
 
 try:
     from lerobot.motors import Motor, MotorNormMode
-    from lerobot.motors.dynamixel import DynamixelMotorsBus    
+    from lerobot.motors.feetech import FeetechMotorsBus
     _LEROBOT_AVAILABLE = True
 except ImportError:
     _LEROBOT_AVAILABLE = False
@@ -27,75 +26,84 @@ except ImportError:
     )
 
 
-# ── Motor definitions for SO-101 ─────────────────────────────────────────────
+# ── Motor definitions for SO-101 (Feetech STS3215) ───────────────────────────
 
-SO101_MOTORS = {
-    "shoulder_pan":  Motor(1, "xl330-m077", MotorNormMode.RANGE_M100_100),
-    "shoulder_lift": Motor(2, "xl330-m077", MotorNormMode.RANGE_M100_100),
-    "elbow_flex":    Motor(3, "xl330-m077", MotorNormMode.RANGE_M100_100),
-    "wrist_flex":    Motor(4, "xl330-m077", MotorNormMode.RANGE_M100_100),
-    "wrist_roll":    Motor(5, "xl330-m077", MotorNormMode.RANGE_M100_100),
-    "gripper":       Motor(6, "xl330-m077", MotorNormMode.RANGE_0_100),
-}
+def _make_so101_motors(norm_mode=None):
+    if not _LEROBOT_AVAILABLE:
+        return {m: i+1 for i, m in enumerate([
+            "shoulder_pan", "shoulder_lift", "elbow_flex",
+            "wrist_flex", "wrist_roll", "gripper",
+        ])}
+    body_mode = norm_mode or MotorNormMode.RANGE_M100_100
+    return {
+        "shoulder_pan":  Motor(1, "sts3215", body_mode),
+        "shoulder_lift": Motor(2, "sts3215", body_mode),
+        "elbow_flex":    Motor(3, "sts3215", body_mode),
+        "wrist_flex":    Motor(4, "sts3215", body_mode),
+        "wrist_roll":    Motor(5, "sts3215", body_mode),
+        "gripper":       Motor(6, "sts3215", MotorNormMode.RANGE_0_100),
+    }
 
 
-# ── Stub bus used when lerobot is unavailable ─────────────────────────────────
+MOTOR_NAMES = [
+    "shoulder_pan", "shoulder_lift", "elbow_flex",
+    "wrist_flex", "wrist_roll", "gripper",
+]
+
+
+# ── Stub bus ──────────────────────────────────────────────────────────────────
 
 class _StubBus:
-    """No-hardware stub — logs instead of writing to serial."""
-
-    def __init__(self, port: str, motors: dict):
+    def __init__(self, port: str):
         self.port = port
-        self.motors = motors
-        self._connected = False
 
     def connect(self):
         log.info(f"[STUB] connect → {self.port}")
-        self._connected = True
 
-    def disconnect(self):
+    def disconnect(self, disable_torque=True):
         log.info(f"[STUB] disconnect → {self.port}")
-        self._connected = False
 
-    def read(self, data_name: str, motor_names: list) -> list:
-        return [0] * len(motor_names)
+    def sync_read(self, data_name: str) -> dict:
+        return {m: 0.0 for m in MOTOR_NAMES}
 
-    def write(self, data_name: str, values, motor_names: list):
-        log.debug(f"[STUB] write {data_name} = {values} → {self.port}")
+    def sync_write(self, data_name: str, values: dict):
+        log.debug(f"[STUB] sync_write {data_name} = {values} → {self.port}")
 
-    def set_calibration(self, calibration: dict):
+    def disable_torque(self):
+        pass
+
+    def enable_torque(self, motor=None):
         pass
 
 
-def _make_bus(port: Optional[str], motors: dict):
-    """Factory: real DynamixelMotorsBus when lerobot is available, else stub."""
+def _make_bus(port: Optional[str], calibration=None):
     if port is None:
         return None
     if _LEROBOT_AVAILABLE:
-        return DynamixelMotorsBus(port=port, motors=motors)
-    return _StubBus(port=port, motors=motors)
+        return FeetechMotorsBus(
+            port=port,
+            motors=_make_so101_motors(),
+            calibration=calibration,
+        )
+    return _StubBus(port=port)
 
 
 # ── DeviceManager ─────────────────────────────────────────────────────────────
 
-MOTOR_NAMES = list(SO101_MOTORS.keys())
-
-
 class DeviceManager:
     """
-    Manages four SO-101 arms (two leaders, two followers).
-    leader_left is optional for single-leader modes.
+    Manages up to four SO-101 arms over Feetech serial buses.
+    leader_left is optional (None = not connected).
     """
 
     def __init__(self, ports: Dict[str, Optional[str]], baudrate: int = 1_000_000):
         self.ports = ports
-        self.baudrate = baudrate
 
         self._buses: Dict[str, Optional[object]] = {
-            "leader_right":   _make_bus(ports.get("leader_right"),   SO101_MOTORS),
-            "leader_left":    _make_bus(ports.get("leader_left"),    SO101_MOTORS),
-            "follower_right": _make_bus(ports.get("follower_right"), SO101_MOTORS),
-            "follower_left":  _make_bus(ports.get("follower_left"),  SO101_MOTORS),
+            "leader_right":   _make_bus(ports.get("leader_right")),
+            "leader_left":    _make_bus(ports.get("leader_left")),
+            "follower_right": _make_bus(ports.get("follower_right")),
+            "follower_left":  _make_bus(ports.get("follower_left")),
         }
 
         for name, bus in self._buses.items():
@@ -107,38 +115,22 @@ class DeviceManager:
                     log.error(f"Failed to connect {name}: {e}")
                     raise
 
-    # ── Read helpers ──────────────────────────────────────────────────────────
+    def read_positions(self, arm: str) -> Dict[str, float]:
+        bus = self._get_bus(arm)
+        return bus.sync_read("Present_Position")
 
-    def read_positions(self, arm: str) -> Dict[str, int]:
-        """Return {motor_name: position_value} for the given arm."""
-        bus = self._buses.get(arm)
-        if bus is None:
-            raise RuntimeError(f"Arm '{arm}' is not configured.")
-        raw = bus.sync_read("Present_Position")
-        return dict(zip(MOTOR_NAMES, raw))
-
-    # ── Write helpers ─────────────────────────────────────────────────────────
-
-    def write_positions(self, arm: str, positions: Dict[str, int]):
-        """Write position dict to the given arm."""
-        bus = self._buses.get(arm)
-        if bus is None:
-            raise RuntimeError(f"Arm '{arm}' is not configured.")
-        values = [positions[m] for m in MOTOR_NAMES]
+    def write_positions(self, arm: str, positions: Dict[str, float]):
+        bus = self._get_bus(arm)
         bus.sync_write("Goal_Position", positions)
 
     def write_torque(self, arm: str, enable: bool):
         bus = self._buses.get(arm)
         if bus is None:
             return
-        val = [1 if enable else 0] * len(MOTOR_NAMES)
-        if val:
+        if enable:
             bus.enable_torque()
         else:
             bus.disable_torque()
-        log.debug(f"Torque {'ON' if enable else 'OFF'} → {arm}")
-
-    # ── Lifecycle ─────────────────────────────────────────────────────────────
 
     def close(self):
         for name, bus in self._buses.items():
@@ -149,7 +141,11 @@ class DeviceManager:
                 except Exception as e:
                     log.warning(f"Error disconnecting {name}: {e}")
 
-    # ── Convenience ───────────────────────────────────────────────────────────
+    def _get_bus(self, arm: str):
+        bus = self._buses.get(arm)
+        if bus is None:
+            raise RuntimeError(f"Arm '{arm}' is not configured.")
+        return bus
 
     @property
     def has_left_leader(self) -> bool:
