@@ -31,8 +31,8 @@ _CALIB_DIR = Path("configs/calibration")
 
 def _try_import_lerobot():
     try:
-        from lerobot.common.robot_devices.motors.dynamixel import DynamixelMotorsBus
-        from lerobot.common.robot_devices.robots.utils import get_arm_id
+        from lerobot.motors.dynamixel import DynamixelMotorsBus
+        from lerobot.common.control_utils import get_arm_id 
         return True
     except ImportError:
         return False
