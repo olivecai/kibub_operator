@@ -128,7 +128,7 @@ def record(args):
     def save_and_upload(sig=None, frame=None):
         print("\nFinalising and uploading dataset...")
         robot.disconnect() if False else None   # handled below
-        dataset.push_to_hub(tags=["LeRobot", "so101", "dual-arm"])
+        dataset.push_to_hub(tags=["LeRobot", "so101", "dual-arm"], display_data=False,)
         print("Done.")
         sys.exit(0)
 
@@ -212,7 +212,7 @@ def record(args):
     left_leader.disconnect()
 
     if args.push:
-        dataset.push_to_hub(tags=["LeRobot", "so101", "dual-arm"])
+        dataset.push_to_hub(tags=["LeRobot", "so101", "dual-arm"], display_data=False,)
         print(f"Dataset pushed to: https://huggingface.co/datasets/{args.repo_id}")
 
 
