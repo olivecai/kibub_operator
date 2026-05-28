@@ -11,7 +11,7 @@ Usage
 -----
 python record_dual.py \
   --repo-id your-username/dual-arm-dataset \
-  --single_task "pick up the block" \
+  --task "pick up the block" \
   --episodes 50
 """
 
@@ -177,7 +177,8 @@ def record(args):
             # ── Write frame into dataset ──────────────────────────────────────
             dataset.add_frame({
                 "observation.state": torch.from_numpy(state_12),
-                "action":            torch.from_numpy(action_12),
+                "action": torch.from_numpy(action_12),
+                "task": args.task,
             })
 
             # ── Timing ───────────────────────────────────────────────────────
@@ -195,7 +196,7 @@ def record(args):
             dataset.clear_episode_buffer()
             continue
 
-        dataset.save_episode(single_task=args.single_task)
+        dataset.save_episode(task=args.task)
         log_say(f"Episode {episode_idx + 1} saved")
         episode_idx += 1
 
@@ -223,7 +224,7 @@ def record(args):
 def main():
     parser = argparse.ArgumentParser(description="XLeRobot dual-arm data collection")
     parser.add_argument("--repo-id",       required=True)
-    parser.add_argument("--single_task",          required=True)
+    parser.add_argument("--task",          required=True)
     parser.add_argument("--episodes",      type=int,   default=50)
     parser.add_argument("--fps",           type=int,   default=30)
     parser.add_argument("--episode-time-s",type=float, default=60.0,
