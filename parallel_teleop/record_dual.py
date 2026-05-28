@@ -193,7 +193,7 @@ def record(args):
             dataset.clear_episode_buffer()
             continue
 
-        dataset.save_episode(single_task=args.task)
+        dataset.save_episode(task=args.task)
         log_say(f"Episode {episode_idx + 1} saved")
         episode_idx += 1
 
