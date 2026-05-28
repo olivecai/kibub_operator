@@ -16,6 +16,7 @@ log = logging.getLogger(__name__)
 # ── lerobot import with graceful fallback ─────────────────────────────────────
 
 try:
+    from lerobot.motors import Motor, MotorNormMode
     from lerobot.motors.dynamixel import DynamixelMotorsBus    
     _LEROBOT_AVAILABLE = True
 except ImportError:
@@ -29,12 +30,12 @@ except ImportError:
 # ── Motor definitions for SO-101 ─────────────────────────────────────────────
 
 SO101_MOTORS = {
-    "shoulder_pan":   (1, "xl330-m077"),
-    "shoulder_lift":  (2, "xl330-m077"),
-    "elbow_flex":     (3, "xl330-m077"),
-    "wrist_flex":     (4, "xl330-m077"),
-    "wrist_roll":     (5, "xl330-m077"),
-    "gripper":        (6, "xl330-m077"),
+    "shoulder_pan":  Motor(1, "xl330-m077", MotorNormMode.RANGE_M100_100),
+    "shoulder_lift": Motor(2, "xl330-m077", MotorNormMode.RANGE_M100_100),
+    "elbow_flex":    Motor(3, "xl330-m077", MotorNormMode.RANGE_M100_100),
+    "wrist_flex":    Motor(4, "xl330-m077", MotorNormMode.RANGE_M100_100),
+    "wrist_roll":    Motor(5, "xl330-m077", MotorNormMode.RANGE_M100_100),
+    "gripper":       Motor(6, "xl330-m077", MotorNormMode.RANGE_0_100),
 }
 
 
@@ -113,7 +114,7 @@ class DeviceManager:
         bus = self._buses.get(arm)
         if bus is None:
             raise RuntimeError(f"Arm '{arm}' is not configured.")
-        raw = bus.read("Present_Position", MOTOR_NAMES)
+        raw = bus.sync_read("Present_Position")
         return dict(zip(MOTOR_NAMES, raw))
 
     # ── Write helpers ─────────────────────────────────────────────────────────
@@ -124,14 +125,17 @@ class DeviceManager:
         if bus is None:
             raise RuntimeError(f"Arm '{arm}' is not configured.")
         values = [positions[m] for m in MOTOR_NAMES]
-        bus.write("Goal_Position", values, MOTOR_NAMES)
+        bus.sync_write("Goal_Position", positions)
 
     def write_torque(self, arm: str, enable: bool):
         bus = self._buses.get(arm)
         if bus is None:
             return
         val = [1 if enable else 0] * len(MOTOR_NAMES)
-        bus.write("Torque_Enable", val, MOTOR_NAMES)
+        if val:
+            bus.enable_torque()
+        else:
+            bus.disable_torque()
         log.debug(f"Torque {'ON' if enable else 'OFF'} → {arm}")
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
