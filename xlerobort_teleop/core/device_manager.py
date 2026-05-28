@@ -16,7 +16,8 @@ log = logging.getLogger(__name__)
 # ── lerobot import with graceful fallback ─────────────────────────────────────
 
 try:
-    from lerobot.motors.dynamixel import DynamixelMotorsBus    _LEROBOT_AVAILABLE = True
+    from lerobot.motors.dynamixel import DynamixelMotorsBus    
+    _LEROBOT_AVAILABLE = True
 except ImportError:
     _LEROBOT_AVAILABLE = False
     log.warning(
