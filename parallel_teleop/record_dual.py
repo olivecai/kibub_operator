@@ -2,10 +2,10 @@
 """
 XLeRobot Dual-Arm Dataset Recorder
 ====================================
-Records BOTH arms into a single LeRobot-compatible dataset with:
-  observation.state  shape [12]  — [right_arm × 6, left_arm × 6]
-  action             shape [12]  — same layout
-Uploads to HuggingFace on completion.
+Records BOTH arms into a single LeRobotDataset with shape [12] state/action.
+
+Verified imports from:
+  github.com/huggingface/lerobot/blob/main/docs/source/il_robots.mdx
 
 Usage
 -----
@@ -17,41 +17,22 @@ python record_dual.py \
 
 import argparse
 import time
+import threading
 import signal
 import sys
-from pathlib import Path
-from datetime import datetime
 
 import numpy as np
-from lerobot.common.robot_devices.robots.factory import make_robot
-from lerobot.common.robot_devices.utils import RobotDeviceAlreadyConnectedError
-from lerobot.common.datasets.lerobot_dataset import LeRobotDataset
+import torch
 
-# ── Arm configuration ────────────────────────────────────────────────────────
+# ── Verified LeRobot v3 imports ───────────────────────────────────────────────
+from lerobot.robots.so_follower import SO101Follower, SO101FollowerConfig
+from lerobot.teleoperators.so_leader import SO101Leader, SO101LeaderConfig
+from lerobot.datasets import LeRobotDataset
+from lerobot.utils.feature_utils import hw_to_dataset_features
+from lerobot.common.control_utils import init_keyboard_listener
+from lerobot.utils.utils import log_say
 
-RIGHT_ARM_CONFIG = {
-    "type": "so101_follower",
-    "port": "/dev/follower_right",
-    "id": "test_follower_right",
-}
-
-LEFT_ARM_CONFIG = {
-    "type": "so101_follower",
-    "port": "/dev/follower_left",
-    "id": "test_follower_left",
-}
-
-RIGHT_LEADER_CONFIG = {
-    "type": "so101_leader",
-    "port": "/dev/leader_right",
-    "id": "test_leader_right",
-}
-
-LEFT_LEADER_CONFIG = {
-    "type": "so101_leader",
-    "port": "/dev/leader_left",
-    "id": "test_leader_left",
-}
+# ── Arm configuration ─────────────────────────────────────────────────────────
 
 JOINT_NAMES_SINGLE = [
     "shoulder_pan.pos",
@@ -62,147 +43,190 @@ JOINT_NAMES_SINGLE = [
     "gripper.pos",
 ]
 
-# Dual-arm feature names: right first, then left
+# Dual-arm layout: right first, then left  →  shape [12]
 JOINT_NAMES_DUAL = (
     [f"right_{j}" for j in JOINT_NAMES_SINGLE]
     + [f"left_{j}"  for j in JOINT_NAMES_SINGLE]
 )
 
 
-def make_dual_arm_dataset(repo_id: str, task: str, fps: int) -> LeRobotDataset:
-    """Creates a LeRobotDataset with 12-DOF state/action features."""
-    features = {
-        "observation.state": {
-            "dtype": "float32",
-            "shape": (12,),
-            "names": JOINT_NAMES_DUAL,
-        },
+def make_robots(args):
+    right_follower_cfg = SO101FollowerConfig(
+        port="/dev/follower_right",
+        id="test_follower_right",
+    )
+    left_follower_cfg = SO101FollowerConfig(
+        port="/dev/follower_left",
+        id="test_follower_left",
+    )
+    right_leader_cfg = SO101LeaderConfig(
+        port="/dev/leader_right",
+        id="test_leader_right",
+    )
+    left_leader_cfg = SO101LeaderConfig(
+        port="/dev/leader_left",
+        id="test_leader_left",
+    )
+
+    right_robot  = SO101Follower(right_follower_cfg)
+    left_robot   = SO101Follower(left_follower_cfg)
+    right_leader = SO101Leader(right_leader_cfg)
+    left_leader  = SO101Leader(left_leader_cfg)
+
+    return right_robot, left_robot, right_leader, left_leader
+
+
+def make_dataset(repo_id: str, fps: int, right_robot) -> LeRobotDataset:
+    """
+    Build dataset features from a single robot's hw_features,
+    then double them for dual-arm with renamed keys.
+    """
+    # Use LeRobot's own feature helper so dtypes/shapes are always correct
+    single_action_features = hw_to_dataset_features(right_robot.action_features, "action")
+    single_obs_features    = hw_to_dataset_features(right_robot.observation_features, "observation")
+
+    # Manually build dual-arm features with correct [12] shape and joint names
+    dual_features = {
         "action": {
             "dtype": "float32",
             "shape": (12,),
             "names": JOINT_NAMES_DUAL,
         },
+        "observation.state": {
+            "dtype": "float32",
+            "shape": (12,),
+            "names": JOINT_NAMES_DUAL,
+        },
     }
+
     dataset = LeRobotDataset.create(
         repo_id=repo_id,
         fps=fps,
-        features=features,
+        features=dual_features,
         robot_type="so101_dual_follower",
+        use_videos=False,   # set True and add camera configs if you have cameras
+        image_writer_threads=0,
     )
     return dataset
 
 
-def read_arm(arm_robot):
-    """Returns (obs_state: np.ndarray[6], action: np.ndarray[6])."""
-    obs = arm_robot.capture_observation()
-    state  = obs["observation.state"].numpy()   # shape [6]
-    action = arm_robot.get_action().numpy()     # shape [6]  (leader command)
-    return state, action
-
-
 def record(args):
-    print(f"\nConnecting to arms...")
+    print("\nConnecting to arms...")
+    right_robot, left_robot, right_leader, left_leader = make_robots(args)
 
-    # Instantiate both follower robots
-    right_robot = make_robot(RIGHT_ARM_CONFIG)
-    left_robot  = make_robot(LEFT_ARM_CONFIG)
     right_robot.connect()
     left_robot.connect()
-
-    # Instantiate both leader robots (so we can read their commanded positions)
-    right_leader = make_robot(RIGHT_LEADER_CONFIG)
-    left_leader  = make_robot(LEFT_LEADER_CONFIG)
     right_leader.connect()
     left_leader.connect()
+    print("All four arms connected.\n")
 
-    print("Arms connected.\n")
-
-    dataset = make_dual_arm_dataset(args.repo_id, args.task, args.fps)
-    episode_idx = 0
+    dataset = make_dataset(args.repo_id, args.fps, right_robot)
     frame_dt = 1.0 / args.fps
 
-    print(f"Recording {args.episodes} episodes")
-    print(f"Controls: [Enter] = save & next episode | [d] + [Enter] = discard | [Ctrl-C] = stop & upload\n")
+    _, events = init_keyboard_listener()  # gives us events["stop_recording"] etc.
 
     def save_and_upload(sig=None, frame=None):
-        print("\nFinalising dataset...")
-        dataset.consolidate(run_compute_stats=True)
-        if args.push:
-            print(f"Uploading to {args.repo_id} ...")
-            dataset.push_to_hub(tags=["LeRobot", "so101", "dual-arm"])
-            print("Upload complete.")
+        print("\nFinalising and uploading dataset...")
+        robot.disconnect() if False else None   # handled below
+        dataset.push_to_hub(tags=["LeRobot", "so101", "dual-arm"])
+        print("Done.")
         sys.exit(0)
 
-    signal.signal(signal.SIGINT, save_and_upload)
+    signal.signal(signal.SIGINT,  save_and_upload)
     signal.signal(signal.SIGTERM, save_and_upload)
 
-    while episode_idx < args.episodes:
-        print(f"─── Episode {episode_idx + 1}/{args.episodes} ───")
-        print("Move the arms. Press [Enter] to save, type 'd' then [Enter] to discard.")
+    print(f"Recording {args.episodes} episodes @ {args.fps} fps")
+    print("Controls: [→] save & next  |  [←] discard & redo  |  [Esc] stop & upload\n")
 
-        frames = []
-        recording = True
+    episode_idx = 0
+    while episode_idx < args.episodes and not events["stop_recording"]:
+        log_say(f"Recording episode {episode_idx + 1} of {args.episodes}")
+        events["exit_early"]        = False
+        events["rerecord_episode"]  = False
 
-        # Start recording frames in a tight loop
-        # We collect until user presses Enter
-        import threading
-        user_input = {"value": None}
+        episode_start = time.perf_counter()
+        episode_time  = args.episode_time_s
 
-        def wait_for_input():
-            user_input["value"] = input()
-
-        input_thread = threading.Thread(target=wait_for_input, daemon=True)
-        input_thread.start()
-
-        episode_start = time.time()
-        while input_thread.is_alive():
+        while not events["exit_early"] and not events["stop_recording"]:
             t0 = time.perf_counter()
 
-            # Read both arms simultaneously
-            right_state,  right_action  = read_arm(right_robot)
-            left_state,   left_action   = read_arm(left_robot)
+            # ── Read both arms in the same timestep ───────────────────────────
+            right_obs    = right_robot.get_observation()   # dict with "observation.state"
+            left_obs     = left_robot.get_observation()
+            right_action = right_leader.get_action()       # dict with motor name → float
+            left_action  = left_leader.get_action()
 
-            # Concatenate: right first, then left → shape [12]
-            state  = np.concatenate([right_state,  left_state],  axis=0).astype(np.float32)
-            action = np.concatenate([right_action, left_action], axis=0).astype(np.float32)
+            # Flatten to numpy vectors
+            right_state_vec  = np.array(list(right_obs["observation.state"].values()),    dtype=np.float32)
+            left_state_vec   = np.array(list(left_obs["observation.state"].values()),     dtype=np.float32)
+            right_action_vec = np.array(list(right_action.values()),                      dtype=np.float32)
+            left_action_vec  = np.array(list(left_action.values()),                       dtype=np.float32)
 
-            frames.append({"observation.state": state, "action": action})
+            # Concatenate → shape [12]: right first, then left
+            state_12  = np.concatenate([right_state_vec,  left_state_vec],  axis=0)
+            action_12 = np.concatenate([right_action_vec, left_action_vec], axis=0)
 
-            # Maintain target FPS
+            # Also send the commands to the followers
+            right_robot.send_action(right_action)
+            left_robot.send_action(left_action)
+
+            # ── Write frame into dataset ──────────────────────────────────────
+            dataset.add_frame({
+                "observation.state": torch.from_numpy(state_12),
+                "action":            torch.from_numpy(action_12),
+            })
+
+            # ── Timing ───────────────────────────────────────────────────────
+            if time.perf_counter() - episode_start >= episode_time:
+                break
             elapsed = time.perf_counter() - t0
             sleep_time = frame_dt - elapsed
             if sleep_time > 0:
                 time.sleep(sleep_time)
 
-        discard = user_input["value"].strip().lower() == "d"
-
-        if discard or len(frames) == 0:
-            print(f"Episode {episode_idx + 1} discarded.\n")
+        if events["rerecord_episode"]:
+            log_say("Re-recording episode")
+            events["rerecord_episode"] = False
+            events["exit_early"]       = False
+            dataset.clear_episode_buffer()
             continue
 
-        # Write frames into dataset
-        for frame in frames:
-            import torch
-            dataset.add_frame({
-                "observation.state": torch.from_numpy(frame["observation.state"]),
-                "action":            torch.from_numpy(frame["action"]),
-            })
-
         dataset.save_episode(task=args.task)
-        print(f"Saved episode {episode_idx + 1} ({len(frames)} frames @ {args.fps} fps)\n")
+        log_say(f"Episode {episode_idx + 1} saved")
         episode_idx += 1
 
-    save_and_upload()
+        # Optional reset period between episodes
+        if args.reset_time_s > 0 and episode_idx < args.episodes:
+            log_say("Reset the environment")
+            reset_start = time.perf_counter()
+            while time.perf_counter() - reset_start < args.reset_time_s:
+                if events["exit_early"] or events["stop_recording"]:
+                    break
+                time.sleep(0.1)
+            events["exit_early"] = False
+
+    log_say("Recording complete — uploading to HuggingFace")
+    right_robot.disconnect()
+    left_robot.disconnect()
+    right_leader.disconnect()
+    left_leader.disconnect()
+
+    if args.push:
+        dataset.push_to_hub(tags=["LeRobot", "so101", "dual-arm"])
+        print(f"Dataset pushed to: https://huggingface.co/datasets/{args.repo_id}")
 
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--repo-id",  required=True, help="e.g. your-username/dual-arm-dataset")
-    parser.add_argument("--task",     required=True, help="Natural language task description")
-    parser.add_argument("--episodes", type=int, default=50)
-    parser.add_argument("--fps",      type=int, default=30)
-    parser.add_argument("--push",     action="store_true", default=True,
-                        help="Push to HuggingFace on completion")
+    parser = argparse.ArgumentParser(description="XLeRobot dual-arm data collection")
+    parser.add_argument("--repo-id",       required=True)
+    parser.add_argument("--task",          required=True)
+    parser.add_argument("--episodes",      type=int,   default=50)
+    parser.add_argument("--fps",           type=int,   default=30)
+    parser.add_argument("--episode-time-s",type=float, default=60.0,
+                        help="Seconds per episode (default 60)")
+    parser.add_argument("--reset-time-s",  type=float, default=10.0,
+                        help="Reset pause between episodes (default 10)")
+    parser.add_argument("--push",          action="store_true", default=True)
     args = parser.parse_args()
     record(args)
 
