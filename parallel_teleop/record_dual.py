@@ -175,7 +175,7 @@ def record(args):
             dataset.add_frame({
                 "observation.state": torch.from_numpy(state_12),
                 "action": torch.from_numpy(action_12),
-                "single_task": args.task,
+                "task": args.task,
             })
 
             # ── Timing ───────────────────────────────────────────────────────
@@ -193,7 +193,7 @@ def record(args):
             dataset.clear_episode_buffer()
             continue
 
-        dataset.save_episode(task=args.task)
+        dataset.save_episode()
         log_say(f"Episode {episode_idx + 1} saved")
         episode_idx += 1
 
