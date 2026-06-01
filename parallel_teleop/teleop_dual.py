@@ -99,7 +99,7 @@ def build_record_command(
     for i, cam in enumerate(cameras):
         cmd += [
             f"--robot.cameras.cam{i}.type=opencv",
-            f"--robot.cameras.cam{i}.index={cam}",
+            f"--robot.cameras.cam{i}.index_or_path={cam}",
             f"--robot.cameras.cam{i}.width=640",
             f"--robot.cameras.cam{i}.height=480",
             f"--robot.cameras.cam{i}.fps={fps}",
