@@ -63,8 +63,14 @@ JOINT_NAMES_DUAL = (
 # Remove entries you don't have; add more the same way.
 #
 CAMERA_CONFIGS = {
-    "top": OpenCVCameraConfig( # june 1 2026: just one camera for now
+    "top_color": OpenCVCameraConfig(
         index_or_path='/dev/video4',
+        fps=30,
+        width=640,
+        height=480,
+    ),
+    "top_depth": OpenCVCameraConfig(
+        index_or_path='/dev/video2',
         fps=30,
         width=640,
         height=480,
@@ -88,19 +94,19 @@ CAMERA_CONFIGS = {
 def make_robots(args):
     right_follower_cfg = SO101FollowerConfig(
         port="/dev/follower_right",
-        id="test_follower_right",
+        id="follower_right",
     )
     left_follower_cfg = SO101FollowerConfig(
         port="/dev/follower_left",
-        id="test_follower_left",
+        id="follower_left",
     )
     right_leader_cfg = SO101LeaderConfig(
         port="/dev/leader_right",
-        id="test_leader_right",
+        id="leader_right",
     )
     left_leader_cfg = SO101LeaderConfig(
         port="/dev/leader_left",
-        id="test_leader_left",
+        id="leader_left",
     )
 
     right_robot  = SO101Follower(right_follower_cfg)
@@ -288,11 +294,15 @@ def record(args):
 
         if args.reset_time_s > 0 and episode_idx < args.episodes:
             log_say("Reset the environment")
+            print(f"Resetting... (you have {args.reset_time_s} seconds)")
             reset_start = time.perf_counter()
             while time.perf_counter() - reset_start < args.reset_time_s:
                 if events["exit_early"] or events["stop_recording"]:
                     break
-                time.sleep(0.1)
+                # Keep followers tracking leaders during reset
+                right_robot.send_action(right_leader.get_action())
+                left_robot.send_action(left_leader.get_action())
+                time.sleep(frame_dt)
             events["exit_early"] = False
 
     log_say("Recording complete — uploading to HuggingFace")

@@ -24,10 +24,10 @@ import time
 # ── Arm configuration ─────────────────────────────────────────────────────────
 
 ARMS = {
-    "leader_right":   {"port": "/dev/leader_right",   "id": "test_leader_right"},
-    "leader_left":    {"port": "/dev/leader_left",    "id": "test_leader_left"},
-    "follower_right": {"port": "/dev/follower_right", "id": "test_follower_right"},
-    "follower_left":  {"port": "/dev/follower_left",  "id": "test_follower_left"},
+    "leader_right":   {"port": "/dev/leader_right",   "id": "leader_right"},
+    "leader_left":    {"port": "/dev/leader_left",    "id": "leader_left"},
+    "follower_right": {"port": "/dev/follower_right", "id": "follower_right"},
+    "follower_left":  {"port": "/dev/follower_left",  "id": "follower_left"},
 }
 
 MODES = {
