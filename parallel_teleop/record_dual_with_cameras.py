@@ -63,30 +63,36 @@ JOINT_NAMES_DUAL = (
 # Remove entries you don't have; add more the same way.
 #
 CAMERA_CONFIGS = {
-    "top_color": OpenCVCameraConfig(
+    "top_realsense_color": OpenCVCameraConfig(
         index_or_path='/dev/video4',
         fps=30,
         width=640,
         height=480,
     ),
-    "top_depth": OpenCVCameraConfig(
+    "top_realsense_depth": OpenCVCameraConfig(
         index_or_path='/dev/video2',
         fps=30,
         width=640,
         height=480,
     ),
-    # "wrist_right": OpenCVCameraConfig(
-    #     index_or_path=2,
-    #     fps=30,
-    #     width=640,
-    #     height=480,
-    # ),
-    # "wrist_left": OpenCVCameraConfig(
-    #     index_or_path=4,
-    #     fps=30,
-    #     width=640,
-    #     height=480,
-    # ),
+    "top_webcam": OpenCVCameraConfig(
+        index_or_path='/dev/video6',
+        fps=30,
+        width=640,
+        height=480,
+    ),
+    "wrist_right": OpenCVCameraConfig(
+        index_or_path='/dev/wrist_right',
+        fps=30,
+        width=640,
+        height=480,
+    ),
+    "wrist_left": OpenCVCameraConfig(
+        index_or_path='/dev/wrist_left',
+        fps=30,
+        width=640,
+        height=480,
+    ),
 }
 # ── CAMERA end ────────────────────────────────────────────────────────────────
 
@@ -118,9 +124,15 @@ def make_robots(args):
 
 
 # ── CAMERA: instantiate and connect all cameras ───────────────────────────────
-def make_cameras() -> dict:
+def make_cameras(selected_names=None) -> dict:
+    """
+    Instantiate and connect cameras. If `selected_names` is provided (list of
+    keys), only those cameras from `CAMERA_CONFIGS` will be used.
+    """
     cameras = {}
     for name, cfg in CAMERA_CONFIGS.items():
+        if selected_names is not None and name not in selected_names:
+            continue
         print(f"Attempting to connect to camera {name} with cfg {cfg}")
         cam = OpenCVCamera(cfg)
         cam.connect()
@@ -130,7 +142,7 @@ def make_cameras() -> dict:
 # ── CAMERA end ────────────────────────────────────────────────────────────────
 
 
-def make_dataset(repo_id: str, fps: int) -> LeRobotDataset:
+def make_dataset(repo_id: str, fps: int, selected_names=None) -> LeRobotDataset:
     """
     Build dataset features for dual-arm state/action [12] + camera images.
     """
@@ -155,6 +167,8 @@ def make_dataset(repo_id: str, fps: int) -> LeRobotDataset:
     # The "video" dtype tells the dataset to write .mp4 files instead of .png.
     #
     for cam_name, cfg in CAMERA_CONFIGS.items():
+        if selected_names is not None and cam_name not in selected_names:
+            continue
         features[f"observation.images.{cam_name}"] = {
             "dtype": "video",                       # → encoded to .mp4 per episode
             "shape": (cfg.height, cfg.width, 3),    # (H, W, C)  uint8 RGB
@@ -185,11 +199,12 @@ def record(args):
 
     # ── CAMERA: connect cameras ───────────────────────────────────────────────
     print("Connecting to cameras...")
-    cameras = make_cameras()
+    # Validate and connect only requested cameras (if any)
+    cameras = make_cameras(selected_names=args.cameras)
     print()
     # ── CAMERA end ────────────────────────────────────────────────────────────
 
-    dataset = make_dataset(args.repo_id, args.fps)
+    dataset = make_dataset(args.repo_id, args.fps, selected_names=args.cameras)
     frame_dt = 1.0 / args.fps
 
     _, events = init_keyboard_listener()
@@ -332,12 +347,21 @@ def main():
     parser.add_argument("--task",           required=True)
     parser.add_argument("--episodes",       type=int,   default=50)
     parser.add_argument("--fps",            type=int,   default=30)
+    parser.add_argument("--cameras",        nargs="+", default=None,
+                        help="List of camera keys to include (from CAMERA_CONFIGS).")
     parser.add_argument("--episode-time-s", type=float, default=60.0,
                         help="Seconds per episode (default 60)")
     parser.add_argument("--reset-time-s",   type=float, default=10.0,
                         help="Reset pause between episodes (default 10)")
     parser.add_argument("--push",           action="store_true", default=True)
     args = parser.parse_args()
+    # Validate camera names if provided
+    if args.cameras is not None:
+        available = set(CAMERA_CONFIGS.keys())
+        requested = set(args.cameras)
+        unknown = requested - available
+        if unknown:
+            parser.error(f"Unknown camera(s): {', '.join(sorted(unknown))}. Available: {', '.join(sorted(available))}")
     record(args)
 
 
