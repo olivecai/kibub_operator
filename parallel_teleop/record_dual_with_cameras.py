@@ -34,8 +34,8 @@ from lerobot.utils.feature_utils import hw_to_dataset_features
 from lerobot.common.control_utils import init_keyboard_listener
 from lerobot.utils.utils import log_say
 
-# ── CAMERA: LeRobot v3 camera driver ─────────────────────────────────────────
-from lerobot.cameras.opencv import OpenCVCamera, OpenCVCameraConfig
+# ── CAMERA: Custom camera API ────────────────────────────────────────────────────
+from camera_api import Camera, CameraConfig
 
 # ── Arm configuration ─────────────────────────────────────────────────────────
 
@@ -63,31 +63,31 @@ JOINT_NAMES_DUAL = (
 # Remove entries you don't have; add more the same way.
 #
 CAMERA_CONFIGS = {
-    "top_realsense_color": OpenCVCameraConfig(
+    "top_realsense_color": CameraConfig(
         index_or_path='/dev/video4',
         fps=30,
         width=640,
         height=480,
     ),
-    "top_realsense_depth": OpenCVCameraConfig(
+    "top_realsense_depth": CameraConfig(
         index_or_path='/dev/video2',
         fps=30,
         width=640,
         height=480,
     ),
-    "top_webcam": OpenCVCameraConfig(
+    "top_webcam": CameraConfig(
         index_or_path='/dev/video6',
         fps=30,
         width=640,
         height=480,
     ),
-    "wrist_right": OpenCVCameraConfig(
+    "wrist_right": CameraConfig(
         index_or_path='/dev/wrist_right',
         fps=30,
         width=640,
         height=480,
     ),
-    "wrist_left": OpenCVCameraConfig(
+    "wrist_left": CameraConfig(
         index_or_path='/dev/wrist_left',
         fps=30,
         width=640,
@@ -134,7 +134,7 @@ def make_cameras(selected_names=None) -> dict:
         if selected_names is not None and name not in selected_names:
             continue
         print(f"Attempting to connect to camera {name} with cfg {cfg}")
-        cam = OpenCVCamera(cfg)
+        cam = Camera(cfg)
         cam.connect()
         print(f"  Camera '{name}' connected  (index_or_path={cfg.index_or_path}, {cfg.width}x{cfg.height}@{cfg.fps}fps)")
         cameras[name] = cam
@@ -201,6 +201,8 @@ def record(args):
     print("Connecting to cameras...")
     # Validate and connect only requested cameras (if any)
     cameras = make_cameras(selected_names=args.cameras)
+    print("Warming up cameras...")
+    time.sleep(0.5)  # Let background threads capture initial frames
     print()
     # ── CAMERA end ────────────────────────────────────────────────────────────
 
@@ -263,13 +265,18 @@ def record(args):
 
             # ── CAMERA: capture one frame per camera ──────────────────────────
             #
-            # OpenCVCamera.async_read() is non-blocking and returns the latest
+            # Camera.async_read() is non-blocking and returns the latest
             # frame already captured by the camera's background thread.
             # Use .read() instead if you want a blocking synchronous grab.
+            # (custom camera_api implementation)
             #
             camera_frames = {}
             for cam_name, cam in cameras.items():
-                frame = cam.async_read(timeout_ms=200)   # np.ndarray uint8 (H,W,3) BGR
+                frame = cam.async_read(timeout_ms=3000)   # np.ndarray uint8 (H,W,3) BGR
+                if frame is None:
+                    print(f"  WARNING: Camera '{cam_name}' failed to capture frame (timeout)")
+                    
+                    continue
                 # LeRobot expects RGB, so convert
                 frame_rgb = frame[..., ::-1].copy()      # BGR → RGB
                 camera_frames[cam_name] = torch.from_numpy(frame_rgb)
@@ -284,8 +291,9 @@ def record(args):
             # ── CAMERA: merge camera frames into frame_data ───────────────────
             for cam_name, tensor in camera_frames.items():
                 frame_data[f"observation.images.{cam_name}"] = tensor
-            # ── CAMERA end ────────────────────────────────────────────────────
 
+            # ── CAMERA end ────────────────────────────────────────────────────
+            print("DEBUGGING: frame_data keys:", list(frame_data.keys()))
             dataset.add_frame(frame_data)
 
             # ── Timing ───────────────────────────────────────────────────────
