@@ -4,6 +4,8 @@ XLeRobot Dual-Arm Dataset Recorder  (with cameras)
 ====================================================
 Records BOTH arms + N cameras into a single LeRobotDataset v3.
 
+NOTE: leaders and followers physically connected to kibub machine
+
 State/action shape: [12]  (right arm first, then left arm)
 Camera keys:  "observation.images.top"
               "observation.images.wrist_right"

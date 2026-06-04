@@ -46,7 +46,7 @@ imageio-ffmpeg==0.6.0
 importlib_metadata==9.0.0
 Jinja2==3.1.6
 jsonlines==4.0.0
--e git+https://github.com/huggingface/lerobot.git@24017e960c39a24fe1b6ea6248522460fa5aa4b3#egg=lerobot
+-e git+https://github.com/olivecai/lerobot.git@main
 markdown-it-py==4.2.0
 MarkupSafe==3.0.3
 mdurl==0.1.2

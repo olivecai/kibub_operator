@@ -2,6 +2,9 @@
 """
 XLeRobot Dual-Arm Teleoperation + Data Collection
 ===================================================
+
+NOTE: leaders and followers physically connected to kibub machine
+
 Modes
 -----
 dual         — standard dual-arm teleop
@@ -12,6 +15,8 @@ record       — dual-arm teleop with LeRobot dataset recording
 Usage
 -----
 python teleop_dual.py --mode dual
+
+### NOTE dont use the record mode this currentlyt doesnt work. only use this script for teleop!!!! if you want to record, go to record_dual_with_cameras 
 python teleop_dual.py --mode record --repo-id your-hf-username/my-dataset --task "pick up the block" --episodes 50
 """
 
