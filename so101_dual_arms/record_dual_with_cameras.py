@@ -245,8 +245,17 @@ def record(args):
 
         episode_start = time.perf_counter()
 
+        countdown_timer = None
         while not events["exit_early"] and not events["stop_recording"]:
             t0 = time.perf_counter()
+
+            # last 5 seconds give a countdown:
+            elapsed = t0 - episode_start
+            if elapsed > args.episode_time_s - 5:
+                seconds_left = int(args.episode_time_s - elapsed)
+                if seconds_left != countdown_timer:
+                    print(f"Recording will end in {seconds_left} seconds")
+                    countdown_timer = seconds_left
 
             # ── Read both arms ────────────────────────────────────────────────
             right_obs    = right_robot.get_observation()
@@ -298,7 +307,7 @@ def record(args):
                 frame_data[f"observation.images.{cam_name}"] = tensor
 
             # ── CAMERA end ────────────────────────────────────────────────────
-            print("DEBUGGING: frame_data keys:", list(frame_data.keys()))
+            # print("DEBUGGING: frame_data keys:", list(frame_data.keys()))
             dataset.add_frame(frame_data)
 
             # ── Timing ───────────────────────────────────────────────────────
