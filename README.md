@@ -13,6 +13,7 @@ As of june 4 2026, the openclaw agent should not need to access this repo (it sh
 3. In step 3 of the lerobot installation instructions, run `git clone https://github.com/olivecai/lerobot.git` **instead** of `git clone https://github.com/huggingface/lerobot.git` into /home/${COW_USER}/.
 4. Follow the rest of the lerobot installation instructions, working inside of your virtual env. Importantly, run `pip install -e` in the /lerobot directory. When you run `pip show lerobot`, you should see 'Editable project location: /home/${COW_USER}/lerobot'
 5. Run `pip install -r /home/${COW_USER}/kibub_operator/cow/lerobot_requirements.txt` to install the rest of the needed packages (set COW_USER accordingly; COW_USER=ocai, for example)
+6. For good measure, since these things don't quite like to work very well: `cd /home/${USER}/lerobot/ ; pip install lerobot[groot]`
 6. Log into huggingface: `hf auth login` and set HF_USER in cli. (ie HF_USER=oliveoil8888)
 
 # Kibub operator 
@@ -49,7 +50,7 @@ lerobot-calibrate --robot.type=so101_follower --robot.port=/dev/follower_right -
 kibub shell: 
 ```
 conda activate lerobot
-cd /home/kibub/so101_dual_arms/
+cd /home/kibub/kibub_operator/so101_dual_arms/
 
 python teleop_dual.py --mode dual
 ```
@@ -58,22 +59,45 @@ python teleop_dual.py --mode dual
 *Pushes dataset to huggingface*
 kibub shell:
 ```
+hf auth login
+HF_USER=oliveoil8888
 conda activate lerobot
-cd /home/kibub/so101_dual_arms/
-REPO="short_and_sweet_repo_name"
-TASK="Something describing a simple task"
-EPISODE_TIME_S=10
-RESET_TIME_S=4
+cd /home/kibub/kibub_operator/so101_dual_arms/
+REPO="pick_up_the_cup"
+TASK="Pick up the cup by the cup handle"
+EPISODE_TIME_S=15
+RESET_TIME_S=5
 EPISODES=50
 HF_USER=oliveoil8888 
 CAMERAS="top_realsense_color top_realsense_depth wrist_right wrist_left top_webcam" 
 #total five cameras that you can include/exclude
 
-python3 record_dual_with_cameras.py --repo-id ${HF_USER}/${REPO} --task “${TASK}” --episode-time-s ${EPISODE_TIME_S} --reset-time-s ${RESET_TIME_S} --episodes ${EPISODES} --camera ${CAMERAS} --push
+python3 record_dual_with_cameras.py --repo-id ${HF_USER}/${REPO} --task "${TASK}" --episode-time-s ${EPISODE_TIME_S} --reset-time-s ${RESET_TIME_S} --episodes ${EPISODES} --camera ${CAMERAS} --push
 ```
 
+#### Dataset tools: modifying, deleting, adding, removing, etc:
+
+Check out this link for the huggingface documentation: https://huggingface.co/docs/lerobot/en/using_dataset_tools 
+
+Quick commands for convenience:
+
+Delete certain episodes and save new dataset at indices:
+```
+lerobot-edit-dataset \
+    --repo_id oliveoil8888/pick_up_the_cup_1 \
+    --new_repo_id oliveoil8888/pick_up_the_cup \
+    --operation.type delete_episodes \
+    --operation.episode_indices "[33, 41]"
+```
+
+lerobot-edit-dataset \
+    --repo_id lerobot/${REPO} \
+    --new_repo_id lerobot/${REPO}_doctored \
+    --operation.type delete_episodes \
+    --operation.episode_indices "[0, 2, 5]"
+
 ## Train a model and save checkpoints locally:
-*Retrieves the dataset from huggingface, saves model locally*
+*Download the dataset from huggingface, then trains and saves model locally*
 cow shell:
 ```
 conda activate lerobot
@@ -82,10 +106,16 @@ REPO="short_and_sweet_repo_name"
 TASK="Something describing a simple task"
 POLICY="groot"
 HF_USER=oliveoil8888
-STEPS=5000
-BATCH_SIZE=5
+STEPS=10000
+BATCH_SIZE=4
 
-lerobot-train --dataset.repo_id=${HF_USER}/${REPO} --policy.type=${POLICY} --policy.base_model_path=nvidia/GR00T-N1.5-3B --policy.push_to_hub=false --output_dir=outputs/train/${POLICY}-${REPO} --job_name=job-${REPO} --policy.device=cuda --wandb.enable=false --steps=${STEPS} --batch_size=${BATCH_SIZE} --save_checkpoint=true
+PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True #this is to avoid the cuda out of memory error
+
+#download the dataset from huggingface
+hf download ${HF_USER}/${REPO}   --repo-type dataset   --local-dir /home/${USER}/.cache/huggingface/lerobot/${HF_USER}/${REPO}
+
+#train the model
+lerobot-train --dataset.repo_id=${HF_USER}/${REPO} --dataset.root=/home/${USER}/.cache/huggingface/lerobot/${HF_USER}/${REPO} --policy.type=${POLICY} --policy.base_model_path=nvidia/GR00T-N1.5-3B --policy.push_to_hub=false --output_dir=outputs/train/${POLICY}-${REPO} --job_name=job-${REPO} --policy.device=cuda --wandb.enable=false --steps=${STEPS} --batch_size=${BATCH_SIZE} --save_checkpoint=true
 ```
 
 ## Push your trained model to huggingface:
