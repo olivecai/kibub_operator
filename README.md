@@ -63,10 +63,10 @@ hf auth login
 HF_USER=oliveoil8888
 conda activate lerobot
 cd /home/kibub/kibub_operator/so101_dual_arms/
-REPO="pick_up_the_cup"
-TASK="Pick up the cup by the cup handle"
-EPISODE_TIME_S=15
-RESET_TIME_S=5
+REPO="pick_up_the_cup_right"
+TASK="Pick up the cup by the cup handle using the right arm"
+EPISODE_TIME_S=10
+RESET_TIME_S=10
 EPISODES=50
 HF_USER=oliveoil8888 
 CAMERAS="top_realsense_color top_realsense_depth wrist_right wrist_left top_webcam" 
@@ -88,13 +88,37 @@ lerobot-edit-dataset \
     --new_repo_id oliveoil8888/pick_up_the_cup \
     --operation.type delete_episodes \
     --operation.episode_indices "[33, 41]"
-```
 
 lerobot-edit-dataset \
     --repo_id lerobot/${REPO} \
     --new_repo_id lerobot/${REPO}_doctored \
     --operation.type delete_episodes \
-    --operation.episode_indices "[0, 2, 5]"
+    --operation.episode_indices "[0, 2, 5]"\
+```
+
+After editing your dataset, you can push it to huggingface in a python interpreter with:
+```
+from huggingface_hub import HfApi
+
+LOCAL = "/home/kibub/.cache/huggingface/lerobot/oliveoil8888/pick_up_the_cup_right_arm" # locally stored path
+REPO  = "oliveoil8888/pick-up-cup-right-arm" # repo-id to push to the hub
+
+api = HfApi()
+
+for folder in ["data", "meta", "videos"]:
+    print(f"Uploading {folder}...")
+    api.upload_folder(
+        repo_id=REPO,
+        repo_type="dataset",
+        folder_path=f"{LOCAL}/{folder}",
+        path_in_repo=folder,
+    )
+    print(f"Done: {folder}")
+
+api.create_tag("oliveoil8888/pick-up-cup-right-arm", tag="v3.0", repo_type="dataset")
+
+print("All done.")
+```
 
 ## Train a model and save checkpoints locally:
 *Download the dataset from huggingface, then trains and saves model locally*
@@ -116,6 +140,9 @@ hf download ${HF_USER}/${REPO}   --repo-type dataset   --local-dir /home/${USER}
 
 #train the model
 lerobot-train --dataset.repo_id=${HF_USER}/${REPO} --dataset.root=/home/${USER}/.cache/huggingface/lerobot/${HF_USER}/${REPO} --policy.type=${POLICY} --policy.base_model_path=nvidia/GR00T-N1.5-3B --policy.push_to_hub=false --output_dir=outputs/train/${POLICY}-${REPO} --job_name=job-${REPO} --policy.device=cuda --wandb.enable=false --steps=${STEPS} --batch_size=${BATCH_SIZE} --save_checkpoint=true
+
+
+lerobot-train --dataset.repo_id=${HF_USER}/${REPO} --policy.type=${POLICY} --policy.base_model_path=nvidia/GR00T-N1.5-3B --policy.push_to_hub=false --output_dir=outputs/train/${POLICY}-${REPO} --job_name=job-${REPO} --policy.device=cuda --wandb.enable=false --steps=${STEPS} --batch_size=${BATCH_SIZE} --save_checkpoint=true
 ```
 
 ## Push your trained model to huggingface:
@@ -142,11 +169,27 @@ python -m lerobot.async_inference.policy_server   --host=0.0.0.0   --port=8080  
 ```
 
 kibub shell: 
-TODO: add the wristr cameras and make sure the inference works with both wrist cameras!!!!
 ```
 conda activate lerobot
-python -m lerobot.async_inference.robot_client   --robot.type=bi_so_follower  --robot.left_arm_config.port=/dev/follower_left    --robot.right_arm_config.port=/dev/follower_right    --robot.top_cameras="{ top_color: {type: opencv, index_or_path: /dev/video4, width: 640, height: 480, fps: 30}, top_depth: {type: opencv, index_or_path: /dev/video2, width: 640, height: 480, fps: 30}}"   --task=${TASK}   --server_address=10.145.8.86:8080   --policy_type=${POLICY}   --pretrained_name_or_path=${HF_USER}/${POLICY}-${REPO}   --policy_device=cuda   --actions_per_chunk=16 --debug_visualize_queue_size=true --robot.id=follower
+
+python -m lerobot.async_inference.robot_client \
+    --robot.type=bi_so_follower  \
+    --robot.left_arm_config.port=/dev/follower_left  \
+    --robot.right_arm_config.port=/dev/follower_right  \
+    --task="${TASK}"  \
+    --server_address=10.145.8.86:8080  \
+    --policy_type=${POLICY}   \
+    --pretrained_name_or_path=${HF_USER}/${POLICY}-${REPO} \ 
+    --policy_device=cuda   \
+    --actions_per_chunk=16 \
+    --debug_visualize_queue_size=true \
+    --robot.id=follower \
+    --robot.top_cameras="{ top_realsense_color: {type: opencv, index_or_path: /dev/video4, width: 640, height: 480, fps: 30}, top_realsense_depth: {type: opencv, index_or_path: /dev/video2, width: 640, height: 480, fps: 30}, top_webcam: {type: opencv, index_or_path: /dev/video6, width: 640, height: 480, fps: 30}}"  \
+    --robot.right_arm_config.cameras="{ wrist: {type: opencv, index_or_path: /dev/wrist_right, width: 640, height: 480, fps: 30}}" \
+    --robot.left_arm_config.cameras="{ wrist:  {type: opencv, index_or_path: /dev/wrist_left,  width: 640, height: 480, fps: 30}}" 
+
 ```
+
 
 ## Modifying the lerobot code
 
