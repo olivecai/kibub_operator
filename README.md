@@ -63,11 +63,11 @@ hf auth login
 HF_USER=oliveoil8888
 conda activate lerobot
 cd /home/kibub/kibub_operator/so101_dual_arms/
-REPO="pick_up_the_cup_right"
-TASK="Pick up the cup by the cup handle using the right arm"
-EPISODE_TIME_S=10
-RESET_TIME_S=10
-EPISODES=50
+REPO="pick-cup-left-recoveries"
+TASK="Pick up the cup by the cup handle using the left arm"
+EPISODE_TIME_S=15
+RESET_TIME_S=5
+EPISODES=30
 HF_USER=oliveoil8888 
 CAMERAS="top_realsense_color top_realsense_depth wrist_right wrist_left top_webcam" 
 #total five cameras that you can include/exclude
@@ -89,21 +89,35 @@ lerobot-edit-dataset \
     --operation.type delete_episodes \
     --operation.episode_indices "[33, 41]"
 
+    lerobot-edit-dataset \
+    --repo_id oliveoil8888/pick-cup-left-recoveries \
+    --new_repo_id oliveoil8888/pick-up-cup-left-recoveries \
+    --operation.type delete_episodes \
+    --operation.episode_indices "[17]"
+
 lerobot-edit-dataset \
     --repo_id lerobot/${REPO} \
     --new_repo_id lerobot/${REPO}_doctored \
     --operation.type delete_episodes \
-    --operation.episode_indices "[0, 2, 5]"\
+    --operation.episode_indices "[0, 2, 5]"
 ```
 
 After editing your dataset, you can push it to huggingface in a python interpreter with:
 ```
 from huggingface_hub import HfApi
 
-LOCAL = "/home/kibub/.cache/huggingface/lerobot/oliveoil8888/pick_up_the_cup_right_arm" # locally stored path
-REPO  = "oliveoil8888/pick-up-cup-right-arm" # repo-id to push to the hub
-
 api = HfApi()
+
+LOCAL = "/home/kibub/.cache/huggingface/lerobot/oliveoil8888/pick-up-cup-left-recoveries" # locally stored path
+REPO  = "oliveoil8888/pick-up-cup-left-recoveries" # repo-id to push to the hub
+
+api.create_repo(
+    repo_id=REPO,
+    repo_type="dataset",
+    exist_ok=True,
+)
+
+
 
 for folder in ["data", "meta", "videos"]:
     print(f"Uploading {folder}...")
@@ -115,7 +129,7 @@ for folder in ["data", "meta", "videos"]:
     )
     print(f"Done: {folder}")
 
-api.create_tag("oliveoil8888/pick-up-cup-right-arm", tag="v3.0", repo_type="dataset")
+api.create_tag(f"{REPO}, tag="v3.0", repo_type="dataset")
 
 print("All done.")
 ```
