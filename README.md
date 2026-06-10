@@ -73,6 +73,23 @@ CAMERAS="top_realsense_color top_realsense_depth wrist_right wrist_left top_webc
 #total five cameras that you can include/exclude
 
 python3 record_dual_with_cameras.py --repo-id ${HF_USER}/${REPO} --task "${TASK}" --episode-time-s ${EPISODE_TIME_S} --reset-time-s ${RESET_TIME_S} --episodes ${EPISODES} --camera ${CAMERAS} --push
+
+##############################
+
+hf auth login
+HF_USER=oliveoil8888
+conda activate lerobot
+cd /home/kibub/kibub_operator/so101_dual_arms/
+REPO="stack-cup"
+TASK="Place the cup onto the stack of cups"
+EPISODE_TIME_S=30
+RESET_TIME_S=8
+EPISODES=30
+HF_USER=oliveoil8888 
+CAMERAS="top_realsense_color top_realsense_depth wrist_right wrist_left top_webcam" 
+#total five cameras that you can include/exclude
+
+python3 record_dual_with_cameras.py --repo-id ${HF_USER}/${REPO} --task "${TASK}" --episode-time-s ${EPISODE_TIME_S} --reset-time-s ${RESET_TIME_S} --episodes ${EPISODES} --camera ${CAMERAS} --push
 ```
 
 #### Dataset tools: modifying, deleting, adding, removing, etc:
@@ -144,7 +161,7 @@ REPO="short_and_sweet_repo_name"
 TASK="Something describing a simple task"
 POLICY="groot"
 HF_USER=oliveoil8888
-STEPS=10000
+STEPS=50000
 BATCH_SIZE=4
 
 PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True #this is to avoid the cuda out of memory error
@@ -157,6 +174,38 @@ lerobot-train --dataset.repo_id=${HF_USER}/${REPO} --dataset.root=/home/${USER}/
 
 
 lerobot-train --dataset.repo_id=${HF_USER}/${REPO} --policy.type=${POLICY} --policy.base_model_path=nvidia/GR00T-N1.5-3B --policy.push_to_hub=false --output_dir=outputs/train/${POLICY}-${REPO} --job_name=job-${REPO} --policy.device=cuda --wandb.enable=false --steps=${STEPS} --batch_size=${BATCH_SIZE} --save_checkpoint=true
+```
+
+## Finetune your pretrained model:
+
+same command as training, but add --pretrained_path=pretrained_model
+
+cow shell:
+
+```
+conda activate lerobot
+cd /home/${COW_USER}$/lerobot
+REPO="repo_name_finetuned"
+TASK="Task description"
+POLICY="groot"
+HF_USER=oliveoil8888
+STEPS=10000 # usually will be much fewer steps
+BATCH_SIZE=4
+
+lerobot-train \
+  --dataset.repo_id=${HF_USER}/${REPO} \
+  --dataset.root=/home/${USER}/.cache/huggingface/lerobot/${HF_USER}/${REPO} \
+  --policy.type=${POLICY} \
+  --policy.base_model_path=nvidia/GR00T-N1.5-3B \
+  --policy.pretrained_path=oliveoil8888/groot-pick-up-cup-left-arm \
+  --policy.push_to_hub=false \
+  --output_dir=outputs/train/${POLICY}-${REPO} \
+  --job_name=job-${REPO} \
+  --policy.device=cuda \
+  --wandb.enable=false \
+  --steps=10000 \
+  --batch_size=4 \
+  --save_checkpoint=true
 ```
 
 ## Push your trained model to huggingface:
@@ -184,23 +233,15 @@ python -m lerobot.async_inference.policy_server   --host=0.0.0.0   --port=8080  
 
 kibub shell: 
 ```
+REPO=pick-up-cup-right-arm
+TASK="pick up cup with right arm"
+
+POLICY=groot
+HF_USER=oliveoil8888
 conda activate lerobot
 
-python -m lerobot.async_inference.robot_client \
-    --robot.type=bi_so_follower  \
-    --robot.left_arm_config.port=/dev/follower_left  \
-    --robot.right_arm_config.port=/dev/follower_right  \
-    --task="${TASK}"  \
-    --server_address=10.145.8.86:8080  \
-    --policy_type=${POLICY}   \
-    --pretrained_name_or_path=${HF_USER}/${POLICY}-${REPO} \ 
-    --policy_device=cuda   \
-    --actions_per_chunk=16 \
-    --debug_visualize_queue_size=true \
-    --robot.id=follower \
-    --robot.top_cameras="{ top_realsense_color: {type: opencv, index_or_path: /dev/video4, width: 640, height: 480, fps: 30}, top_realsense_depth: {type: opencv, index_or_path: /dev/video2, width: 640, height: 480, fps: 30}, top_webcam: {type: opencv, index_or_path: /dev/video6, width: 640, height: 480, fps: 30}}"  \
-    --robot.right_arm_config.cameras="{ wrist: {type: opencv, index_or_path: /dev/wrist_right, width: 640, height: 480, fps: 30}}" \
-    --robot.left_arm_config.cameras="{ wrist:  {type: opencv, index_or_path: /dev/wrist_left,  width: 640, height: 480, fps: 30}}" 
+python -m lerobot.async_inference.robot_client     --robot.type=bi_so_follower      --robot.left_arm_config.port=/dev/follower_left      --robot.right_arm_config.port=/dev/follower_right      --task="${TASK}"      --server_address=10.145.8.86:8080      --policy_type=${POLICY}       --pretrained_name_or_path=${HF_USER}/${POLICY}-${REPO}  --policy_device=cuda       --actions_per_chunk=16     --debug_visualize_queue_size=true     --robot.id=follower     --robot.top_cameras="{ top_realsense_color: {type: opencv, index_or_path: /dev/video4, width: 640, height: 480, fps: 30}, top_realsense_depth: {type: opencv, index_or_path: /dev/video2, width: 640, height: 480, fps: 30}, top_webcam: {type: opencv, index_or_path: /dev/video6, width: 640, height: 480, fps: 30}}"      --robot.right_arm_config.cameras="{ wrist: {type: opencv, index_or_path: /dev/wrist_right, width: 640, height: 480, fps: 30}}"     --robot.left_arm_config.cameras="{ wrist:  {type: opencv, index_or_path: /dev/wrist_left,  width: 640, height: 480, fps: 30}}"
+
 
 ```
 
