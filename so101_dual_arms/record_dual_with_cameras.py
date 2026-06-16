@@ -66,21 +66,21 @@ JOINT_NAMES_DUAL = (
 #
 CAMERA_CONFIGS = {
     "top_realsense_color": CameraConfig(
-        index_or_path='/dev/video4',
+        index_or_path='/dev/top_realsense_color',
         fps=30,
         width=640,
         height=480,
         fourcc="MJPG",  # Realsense RGB stream is usually YUYV by default, which is slow to capture with OpenCV. MJPG is much faster.
     ),
     "top_realsense_depth": CameraConfig(
-        index_or_path='/dev/video2',
+        index_or_path='/dev/top_realsense_depth',
         fps=30,
         width=640,
         height=480,
         fourcc="MJPG"
     ),
     "top_webcam": CameraConfig(
-        index_or_path='/dev/video6',
+        index_or_path='/dev/top_webcam',
         fps=30,
         width=640,
         height=480,
