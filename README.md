@@ -90,6 +90,26 @@ CAMERAS="top_realsense_color top_realsense_depth wrist_right wrist_left top_webc
 #total five cameras that you can include/exclude
 
 python3 record_dual_with_cameras.py --repo-id ${HF_USER}/${REPO} --task "${TASK}" --episode-time-s ${EPISODE_TIME_S} --reset-time-s ${RESET_TIME_S} --episodes ${EPISODES} --camera ${CAMERAS} --push
+
+
+################################
+
+
+hf auth login
+HF_USER=oliveoil8888
+conda activate lerobot
+cd /home/kibub/kibub_operator/so101_dual_arms/
+REPO="put-screw-into-box-1"
+TASK="Holding the box steady, pick up the screw and place it into the box"
+EPISODE_TIME_S=20
+RESET_TIME_S=2
+EPISODES=50
+HF_USER=oliveoil8888 
+CAMERAS="top_realsense_color top_realsense_depth wrist_right wrist_left top_webcam" 
+#total five cameras that you can include/exclude
+
+python3 record_dual_with_cameras.py --repo-id ${HF_USER}/${REPO} --task "${TASK}" --episode-time-s ${EPISODE_TIME_S} --reset-time-s ${RESET_TIME_S} --episodes ${EPISODES} --camera ${CAMERAS} --push
+
 ```
 
 #### Dataset tools: modifying, deleting, adding, removing, etc:
@@ -101,10 +121,10 @@ Quick commands for convenience:
 Delete certain episodes and save new dataset at indices:
 ```
 lerobot-edit-dataset \
-    --repo_id oliveoil8888/pick_up_the_cup_1 \
-    --new_repo_id oliveoil8888/pick_up_the_cup \
+    --repo_id oliveoil8888/put-screw-into-box-1 \
+    --new_repo_id oliveoil8888/put-screw-into-box-2 \
     --operation.type delete_episodes \
-    --operation.episode_indices "[33, 41]"
+    --operation.episode_indices "[29,30,33, 45]"
 
     lerobot-edit-dataset \
     --repo_id oliveoil8888/pick-cup-left-recoveries \
@@ -125,8 +145,8 @@ from huggingface_hub import HfApi
 
 api = HfApi()
 
-LOCAL = "/home/kibub/.cache/huggingface/lerobot/oliveoil8888/pick-up-cup-left-recoveries" # locally stored path
-REPO  = "oliveoil8888/pick-up-cup-left-recoveries" # repo-id to push to the hub
+LOCAL = "/home/kibub/.cache/huggingface/lerobot/oliveoil8888/put-screw-into-box-2" # locally stored path
+REPO  = "oliveoil8888/pick-and-place-screw" # repo-id to push to the hub
 
 api.create_repo(
     repo_id=REPO,
@@ -146,7 +166,7 @@ for folder in ["data", "meta", "videos"]:
     )
     print(f"Done: {folder}")
 
-api.create_tag(f"{REPO}, tag="v3.0", repo_type="dataset")
+api.create_tag(REPO, tag="v3.0", repo_type="dataset")
 
 print("All done.")
 ```
@@ -155,24 +175,22 @@ print("All done.")
 *Download the dataset from huggingface, then trains and saves model locally*
 cow shell:
 ```
+COW_USER=$(whoami)
 conda activate lerobot
-cd /home/${COW_USER}$/lerobot
-REPO="short_and_sweet_repo_name"
-TASK="Something describing a simple task"
+cd /home/${COW_USER}/lerobot
+REPO="pick-and-place-screw"
+TASK="Put the screw into the box"
 POLICY="groot"
 HF_USER=oliveoil8888
-STEPS=50000
+STEPS=10000
 BATCH_SIZE=4
 
 PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True #this is to avoid the cuda out of memory error
 
 #download the dataset from huggingface
-hf download ${HF_USER}/${REPO}   --repo-type dataset   --local-dir /home/${USER}/.cache/huggingface/lerobot/${HF_USER}/${REPO}
+hf download ${HF_USER}/${REPO}   --repo-type dataset   --local-dir /home/${COW_USER}/.cache/huggingface/lerobot/${HF_USER}/${REPO}
 
 #train the model
-lerobot-train --dataset.repo_id=${HF_USER}/${REPO} --dataset.root=/home/${USER}/.cache/huggingface/lerobot/${HF_USER}/${REPO} --policy.type=${POLICY} --policy.base_model_path=nvidia/GR00T-N1.5-3B --policy.push_to_hub=false --output_dir=outputs/train/${POLICY}-${REPO} --job_name=job-${REPO} --policy.device=cuda --wandb.enable=false --steps=${STEPS} --batch_size=${BATCH_SIZE} --save_checkpoint=true
-
-
 lerobot-train --dataset.repo_id=${HF_USER}/${REPO} --policy.type=${POLICY} --policy.base_model_path=nvidia/GR00T-N1.5-3B --policy.push_to_hub=false --output_dir=outputs/train/${POLICY}-${REPO} --job_name=job-${REPO} --policy.device=cuda --wandb.enable=false --steps=${STEPS} --batch_size=${BATCH_SIZE} --save_checkpoint=true
 ```
 
@@ -197,13 +215,13 @@ lerobot-train \
   --dataset.root=/home/${USER}/.cache/huggingface/lerobot/${HF_USER}/${REPO} \
   --policy.type=${POLICY} \
   --policy.base_model_path=nvidia/GR00T-N1.5-3B \
-  --policy.pretrained_path=oliveoil8888/groot-pick-up-cup-left-arm \
+  --policy.pretrained_path=oliveoil8888/groot-pick-up-cup-left-arm-recoveries \
   --policy.push_to_hub=false \
   --output_dir=outputs/train/${POLICY}-${REPO} \
   --job_name=job-${REPO} \
   --policy.device=cuda \
-  --wandb.enable=false \
-  --steps=10000 \
+  --wandb.enable=true \
+  --steps=50000 \
   --batch_size=4 \
   --save_checkpoint=true
 ```
@@ -220,6 +238,8 @@ POLICY="groot"
 HF_USER=oliveoil8888
 
 hf upload   ${HF_USER}/${POLICY}-${REPO} outputs/train/${POLICY}-${REPO}/checkpoints/last/pretrained_model   .   --repo-type model
+
+# should see 'Start hashing 7 files' ...
 ```
 
 ## Inference
@@ -233,14 +253,14 @@ python -m lerobot.async_inference.policy_server   --host=0.0.0.0   --port=8080  
 
 kibub shell: 
 ```
-REPO=pick-up-cup-right-arm
-TASK="pick up cup with right arm"
+REPO=pick-and-place-screw
+TASK="Holding the box steady, pick up the screw from the table and place it into the box"
 
 POLICY=groot
 HF_USER=oliveoil8888
 conda activate lerobot
 
-python -m lerobot.async_inference.robot_client     --robot.type=bi_so_follower      --robot.left_arm_config.port=/dev/follower_left      --robot.right_arm_config.port=/dev/follower_right      --task="${TASK}"      --server_address=10.145.8.86:8080      --policy_type=${POLICY}       --pretrained_name_or_path=${HF_USER}/${POLICY}-${REPO}  --policy_device=cuda       --actions_per_chunk=16     --debug_visualize_queue_size=true     --robot.id=follower     --robot.top_cameras="{ top_realsense_color: {type: opencv, index_or_path: /dev/video4, width: 640, height: 480, fps: 30}, top_realsense_depth: {type: opencv, index_or_path: /dev/video2, width: 640, height: 480, fps: 30}, top_webcam: {type: opencv, index_or_path: /dev/video6, width: 640, height: 480, fps: 30}}"      --robot.right_arm_config.cameras="{ wrist: {type: opencv, index_or_path: /dev/wrist_right, width: 640, height: 480, fps: 30}}"     --robot.left_arm_config.cameras="{ wrist:  {type: opencv, index_or_path: /dev/wrist_left,  width: 640, height: 480, fps: 30}}"
+python -m lerobot.async_inference.robot_client     --robot.type=bi_so_follower      --robot.left_arm_config.port=/dev/follower_left      --robot.right_arm_config.port=/dev/follower_right      --task="${TASK}"      --server_address=10.145.8.86:8080      --policy_type=${POLICY}       --pretrained_name_or_path=${HF_USER}/${POLICY}-${REPO}  --policy_device=cuda       --actions_per_chunk=16     --debug_visualize_queue_size=true     --robot.id=follower     --robot.top_cameras="{ top_realsense_color: {type: opencv, index_or_path: /dev/top_realsense_color, width: 640, height: 480, fps: 30}, top_realsense_depth: {type: opencv, index_or_path: /dev/top_realsense_depth, width: 640, height: 480, fps: 30}, top_webcam: {type: opencv, index_or_path: /dev/top_webcam, width: 640, height: 480, fps: 30}}"      --robot.right_arm_config.cameras="{ wrist: {type: opencv, index_or_path: /dev/wrist_right, width: 640, height: 480, fps: 30}}"     --robot.left_arm_config.cameras="{ wrist:  {type: opencv, index_or_path: /dev/wrist_left,  width: 640, height: 480, fps: 30}}"
 
 
 ```
