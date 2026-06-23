@@ -79,6 +79,13 @@ CAMERA_CONFIGS = {
         height=480,
         fourcc="MJPG"
     ),
+    "overhead_realsense": CameraConfig(
+        index_or_path='/dev/overhead_realsense',
+        fps=30,
+        width=640,
+        height=480,
+        fourcc="MJPG",  # Realsense RGB stream is usually YUYV by default, which is slow to capture with OpenCV. MJPG is much faster.
+    ),
     "top_webcam": CameraConfig(
         index_or_path='/dev/top_webcam',
         fps=30,

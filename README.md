@@ -109,6 +109,22 @@ CAMERAS="top_realsense_color top_realsense_depth wrist_right wrist_left top_webc
 #total five cameras that you can include/exclude
 
 python3 record_dual_with_cameras.py --repo-id ${HF_USER}/${REPO} --task "${TASK}" --episode-time-s ${EPISODE_TIME_S} --reset-time-s ${RESET_TIME_S} --episodes ${EPISODES} --camera ${CAMERAS} --push
+#####################
+
+hf auth login
+HF_USER=oliveoil8888
+conda activate lerobot
+cd /home/kibub/kibub_operator/so101_dual_arms/
+REPO="pick-up-cup-left-overhead
+TASK="Pick up the cup by the handle"
+EPISODE_TIME_S=15
+RESET_TIME_S=5
+EPISODES=30
+HF_USER=oliveoil8888 
+CAMERAS="top_realsense_color top_realsense_depth wrist_right wrist_left" 
+#total five cameras that you can include/exclude
+
+python3 record_dual_with_cameras.py --repo-id ${HF_USER}/${REPO} --task "${TASK}" --episode-time-s ${EPISODE_TIME_S} --reset-time-s ${RESET_TIME_S} --episodes ${EPISODES} --camera ${CAMERAS} --push
 
 ```
 
