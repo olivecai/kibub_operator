@@ -12,9 +12,16 @@ Camera keys:  "observation.images.top"
               "observation.images.wrist_left"
               (add/remove cameras in CAMERA_CONFIGS below)
 
+RESILIENCE
+----------
+If an episode fails to save (e.g. a corrupted camera frame breaks video
+encoding), the failure is caught, the partial episode buffer is discarded,
+and recording continues automatically — bad episodes never make it into
+the uploaded dataset, and a single bad frame never crashes the whole run.
+
 Usage
 -----
-python record_dual_cameras.py \
+python record_dual_with_cameras.py \
   --repo-id your-username/dual-arm-dataset \
   --task "pick up the block" \
   --episodes 50
@@ -225,6 +232,13 @@ def record(args):
 
     _, events = init_keyboard_listener()
 
+    # ── RESILIENCE: track last good frame per camera so a single bad/missing
+    #    grab doesn't have to be dropped outright — we reuse the last good one.
+    last_good_frame: dict[str, torch.Tensor] = {}
+
+    # ── RESILIENCE: track failed-episode count for the final summary ─────────
+    failed_episode_count = 0
+
     def cleanup_and_upload(sig=None, frame=None):
         print("\nFinalising and uploading dataset...")
         right_robot.disconnect()
@@ -235,7 +249,9 @@ def record(args):
         for cam in cameras.values():
             cam.disconnect()
         # ── CAMERA end ────────────────────────────────────────────────────────
-        dataset.push_to_hub(tags=["LeRobot", "so101", "dual-arm"], display_data=False)
+        dataset.finalize()
+        if args.push:
+            dataset.push_to_hub(tags=["LeRobot", "so101", "dual-arm"], display_data=False)
         print("Done.")
         sys.exit(0)
 
@@ -293,16 +309,39 @@ def record(args):
             # Use .read() instead if you want a blocking synchronous grab.
             # (custom camera_api implementation)
             #
+            # RESILIENCE: validate frame shape/contents before trusting it.
+            # A torn USB/MJPG read can hand back a wrong-shaped or empty
+            # buffer, which is exactly what corrupts the saved video later.
+            # If a frame is bad, we reuse the last known-good frame for that
+            # camera instead of writing garbage (or skipping the camera
+            # entirely, which would also break encoding).
+            #
             camera_frames = {}
             for cam_name, cam in cameras.items():
+                cfg = CAMERA_CONFIGS[cam_name]
                 frame = cam.async_read(timeout_ms=3000)   # np.ndarray uint8 (H,W,3) BGR
-                if frame is None:
-                    print(f"  WARNING: Camera '{cam_name}' failed to capture frame (timeout)")
-                    
+
+                frame_ok = (
+                    frame is not None
+                    and getattr(frame, "size", 0) > 0
+                    and frame.shape == (cfg.height, cfg.width, 3)
+                )
+
+                if not frame_ok:
+                    print(f"  WARNING: Camera '{cam_name}' returned a bad/missing frame; reusing last good frame")
+                    fallback = last_good_frame.get(cam_name)
+                    if fallback is None:
+                        # No good frame yet for this camera (e.g. very first
+                        # frame of the run) — nothing safe to write, skip it.
+                        continue
+                    camera_frames[cam_name] = fallback
                     continue
+
                 # LeRobot expects RGB, so convert
                 frame_rgb = frame[..., ::-1].copy()      # BGR → RGB
-                camera_frames[cam_name] = torch.from_numpy(frame_rgb)
+                tensor = torch.from_numpy(frame_rgb)
+                camera_frames[cam_name] = tensor
+                last_good_frame[cam_name] = tensor
             # ── CAMERA end ────────────────────────────────────────────────────
 
             # ── Write frame into dataset ──────────────────────────────────────
@@ -334,7 +373,26 @@ def record(args):
             dataset.clear_episode_buffer()
             continue
 
-        dataset.save_episode()
+        # ── RESILIENCE: never let a failed save (e.g. corrupted frame breaking
+        #    video encoding) crash the whole recording run. Catch it, discard
+        #    the bad episode's buffer, and keep going — the bad episode simply
+        #    never makes it into the dataset.
+        try:
+            dataset.save_episode()
+        except Exception as e:
+            failed_episode_count += 1
+            print(f"  ERROR: Failed to save episode {episode_idx + 1}: {e}")
+            print("  Discarding this episode and retrying the same slot...")
+            log_say(f"Episode {episode_idx + 1} failed, discarding")
+            try:
+                dataset.clear_episode_buffer()
+            except Exception as cleanup_err:
+                print(f"  WARNING: clear_episode_buffer also raised: {cleanup_err}")
+            # Don't increment episode_idx — retry the same episode number.
+            # (Change to `episode_idx += 1; continue` if you'd rather skip
+            # the failed episode and move on instead of retrying it.)
+            continue
+
         log_say(f"Episode {episode_idx + 1} saved")
         episode_idx += 1
 
@@ -364,6 +422,8 @@ def record(args):
 
     print("Finalizing dataset...")
     dataset.finalize()
+    if failed_episode_count:
+        print(f"  ({failed_episode_count} episode(s) failed to save and were discarded automatically)")
     if args.push:
         dataset.push_to_hub(
             tags=["LeRobot", "so101", "dual-arm"],
