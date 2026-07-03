@@ -44,7 +44,9 @@ from lerobot.common.control_utils import init_keyboard_listener
 from lerobot.utils.utils import log_say
 
 # ── CAMERA: Custom camera API ────────────────────────────────────────────────────
-from camera_api import Camera, CameraConfig
+from camera_api import Camera
+
+from DEVICES import CAMERA_CONFIGS
 
 # ── Arm configuration ─────────────────────────────────────────────────────────
 
@@ -62,60 +64,6 @@ JOINT_NAMES_DUAL = (
     [f"right_{j}" for j in JOINT_NAMES_SINGLE]
     + [f"left_{j}"  for j in JOINT_NAMES_SINGLE]
 )
-
-# ── CAMERA: define your cameras here ─────────────────────────────────────────
-#
-# key        → dataset key, becomes "observation.images.<key>"
-# id      → OS camera id (ls /dev/video* to find yours)
-# width/height/fps should match your camera's supported modes
-#
-# Remove entries you don't have; add more the same way.
-#
-CAMERA_CONFIGS = {
-    "top_realsense_color": CameraConfig(
-        index_or_path='/dev/top_realsense_color',
-        fps=30,
-        width=640,
-        height=480,
-        fourcc="MJPG",  # Realsense RGB stream is usually YUYV by default, which is slow to capture with OpenCV. MJPG is much faster.
-    ),
-    "top_realsense_depth": CameraConfig(
-        index_or_path='/dev/top_realsense_depth',
-        fps=30,
-        width=640,
-        height=480,
-        fourcc="MJPG"
-    ),
-    "overhead_realsense": CameraConfig(
-        index_or_path='/dev/overhead_realsense',
-        fps=30,
-        width=640,
-        height=480,
-        fourcc="MJPG",  # Realsense RGB stream is usually YUYV by default, which is slow to capture with OpenCV. MJPG is much faster.
-    ),
-    "top_webcam": CameraConfig(
-        index_or_path='/dev/top_webcam',
-        fps=30,
-        width=640,
-        height=480,
-        fourcc="MJPG"
-    ),
-    "wrist_right": CameraConfig(
-        index_or_path='/dev/wrist_right',
-        fps=30,
-        width=640,
-        height=480,
-        fourcc="MJPG"
-    ),
-    "wrist_left": CameraConfig(
-        index_or_path='/dev/wrist_left',
-        fps=30,
-        width=640,
-        height=480,
-        fourcc="MJPG"
-    ),
-}
-# ── CAMERA end ────────────────────────────────────────────────────────────────
 
 
 def make_robots(args):
