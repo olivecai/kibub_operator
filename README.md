@@ -249,4 +249,4 @@ Troubleshooting: run `pip show lerobot` to ensure your lerobot fork repo is edit
 
 ## Clearing up space on kibub
 
-`rm -rf `
+Delete the datasets under 'oliveoil8888' (or replace 'oliveoil8888' with your Hugginface usertag): `rm -rf /home/kibub/.cache/huggingface/lerobot/oliveoil8888/*`
