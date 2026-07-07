@@ -97,7 +97,7 @@ lerobot-edit-dataset \
 
 After editing your dataset, you can push it to huggingface via the python script below (simply type `python` or `python3` in your terminal and paste the code below within the python interpreter). Modify the LOCAL and REPO paths:
 
-kibub shell:
+kibub shell in a Python interpreter:
 ```
 from huggingface_hub import HfApi
 
