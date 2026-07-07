@@ -1,20 +1,10 @@
-# README for cow and kibub operator
+# README for Server and kibub operator
 
-Instructions on teleop, recording, training, deploying on the cow and kibub machines, using lerobot and Gr00t. 
-This repository should be cloned on kibub, and does not need to be cloned on cow, though it has the cow requiremnts.txt just for safe keeping.
-Both cow and kibub need the forked lerobot repo.
+Instructions on **teleop**, **recording**, **training**, **deploying** models using lerobot and Gr00t. 
 
-As of june 4 2026, the openclaw agent should not need to access this repo (it should be totally robot agnostic); check out the openclaw-embodied repo at https://github.com/olivecai/openclaw-embodied 
+This repository should be cloned on the **Server** at `/home/user/agent-kibub/kibub_operator` and on the **Client** at `/home/kibub/kibub_operator`.
 
-# Cow operator
 
-## Cow operator install and setup from scatch
-1. Create a virtual environment following steps 1 and 2 in the lerobot installation instructions here: https://huggingface.co/docs/lerobot/installation. 
-3. In step 3 of the lerobot installation instructions, run `git clone https://github.com/olivecai/lerobot.git` **instead** of `git clone https://github.com/huggingface/lerobot.git` into /home/${COW_USER}/.
-4. Follow the rest of the lerobot installation instructions, working inside of your virtual env. Importantly, run `pip install -e` in the /lerobot directory. When you run `pip show lerobot`, you should see 'Editable project location: /home/${COW_USER}/lerobot'
-5. Run `pip install -r /home/${COW_USER}/kibub_operator/cow/lerobot_requirements.txt` to install the rest of the needed packages (set COW_USER accordingly; COW_USER=ocai, for example)
-6. For good measure, since these things don't quite like to work very well: `cd /home/${USER}/lerobot/ ; pip install lerobot[groot]`
-6. Log into huggingface: `hf auth login` and set HF_USER in cli. (ie HF_USER=oliveoil8888)
 
 # Kibub operator 
 
@@ -22,22 +12,22 @@ As of june 4 2026, the openclaw agent should not need to access this repo (it sh
 To access the kibub shell: `ssh kibub@kibub`
 
 ## Kibub operator install and setup from scatch
-1. On the kibub machine in /home/kibub/, clone this repository: https://github.com/olivecai/kibub_operator.
-2. Create a virtual environment following steps 1 and 2 in the lerobot installation instructions here: https://huggingface.co/docs/lerobot/installation. 
-3. In step 3 of the lerobot installation instructions, run git clone `https://github.com/olivecai/lerobot.git` **instead** of `git clone https://github.com/huggingface/lerobot.git` into /home/kibub/.
-4. Follow the rest of the lerobot installation instructions, working inside of your virtual env. Importantly, run `pip install -e` in the /lerobot directory. When you run `pip show lerobot`, you should see 'Editable project location: /home/kibub/lerobot'
-5. Run `pip install -r /home/kibub/kibub_operator/kibub/requirements.txt` to install the rest of the needed packages.
-6. Log into huggingface: `hf auth login` and set HF_USER in cli. (ie HF_USER=oliveoil8888)
+
+1. Launch a Kibub SSH session: `ssh kibub@kibub`. 
+2. Clone **kibub_operator** (https://github.com/olivecai/kibub_operator). If already cloned, cd into repo and `git pull origin main`
+3. Run `conda create -n lerobot -y; conda activate lerobot`
+4. Run `cd kibub_operator; pip install -r /home/kibub/kibub_operator/client_requirements.txt`
+5. Run `pip show lerobot`, you should see 'Editable project location: /home/kibub/lerobot'. If not, something is wrong :-(
+6. Log into huggingface: `hf auth login` and set HF_USER in cli. (ie `export HF_USER=oliveoil8888`)
 
 ## Kibub operator setup on reboot
 Assuming that you have the conda environment and the repositories: run `conda activate lerobot`
 
 # Follower leader dual arm setup with cameras 
-*not wireless. both followers and leaders are connected to kibub machine*
 
-Ensure leaders and followers are connected to kibub machine and enumerated as /dev/leader_right /dev/leader_left /dev/follower_right /dev/follower_left. If necessary, you may have to calibrate the arms. 
+Ensure leaders and followers are connected to kibub machine and enumerated as `/dev/leader_right` `/dev/leader_left` `/dev/follower_right` `/dev/follower_left`. If necessary, you may have to calibrate the arms. 
 
-If you already calibrated them before, you can skip this step since the files are saved in the calibration folder and don't go away after reboot.
+If you already calibrated them before, you can skip this step since the files are saved in the calibration folder and persist after reboot.
 
 ```
 lerobot-calibrate --teleop.type=so101_leader --teleop.port=/dev/leader_left --teleop.id=leader_left
@@ -46,7 +36,10 @@ lerobot-calibrate --robot.type=so101_follower --robot.port=/dev/follower_left --
 lerobot-calibrate --robot.type=so101_follower --robot.port=/dev/follower_right --robot.id=follower_right
 ```
 
-## Dual arm teleoperation (no cameras)
+## Dual arm teleoperation (no cameras needed for teleop)
+
+*Teleoperate follower arms using leader arms*
+
 kibub shell: 
 ```
 conda activate lerobot
@@ -56,66 +49,21 @@ python teleop_dual.py --mode dual
 ```
 
 ## Record a dataset with cameras 
+
 *Pushes dataset to huggingface*
+
+Modify the variables REPO, TASK, EPISODE_TIME_S, RESET_TIME_S, EPISODES, and CAMERAS. Ensure your storage space is sufficient lest your recording fail midway (check /home/kibub/.cache/huggingface/lerobot/)
+
+For CAMERAS, pass a string with the name of each camera you want to include. All available camera names are listed as keys in the dictionary CAMERA_CONFIGS in the file kibub_operator/DEVICES.py.
+
 kibub shell:
 ```
-hf auth login
-HF_USER=oliveoil8888
-conda activate lerobot
-cd /home/kibub/kibub_operator/so101_dual_arms/
-REPO="pick-cup-left-recoveries"
-TASK="Pick up the cup by the cup handle using the left arm"
-EPISODE_TIME_S=15
-RESET_TIME_S=5
-EPISODES=30
-HF_USER=oliveoil8888 
-CAMERAS="top_realsense_color top_realsense_depth wrist_right wrist_left top_webcam" 
-#total five cameras that you can include/exclude
-
-python3 record_dual_with_cameras.py --repo-id ${HF_USER}/${REPO} --task "${TASK}" --episode-time-s ${EPISODE_TIME_S} --reset-time-s ${RESET_TIME_S} --episodes ${EPISODES} --camera ${CAMERAS} --push
-
-##############################
 
 hf auth login
 HF_USER=oliveoil8888
 conda activate lerobot
 cd /home/kibub/kibub_operator/so101_dual_arms/
-REPO="stack-cup"
-TASK="Place the cup onto the stack of cups"
-EPISODE_TIME_S=30
-RESET_TIME_S=8
-EPISODES=30
-HF_USER=oliveoil8888 
-CAMERAS="top_realsense_color top_realsense_depth wrist_right wrist_left top_webcam" 
-#total five cameras that you can include/exclude
-
-python3 record_dual_with_cameras.py --repo-id ${HF_USER}/${REPO} --task "${TASK}" --episode-time-s ${EPISODE_TIME_S} --reset-time-s ${RESET_TIME_S} --episodes ${EPISODES} --camera ${CAMERAS} --push
-
-
-################################
-
-
-hf auth login
-HF_USER=oliveoil8888
-conda activate lerobot
-cd /home/kibub/kibub_operator/so101_dual_arms/
-REPO="put-screw-into-box-1"
-TASK="Holding the box steady, pick up the screw and place it into the box"
-EPISODE_TIME_S=20
-RESET_TIME_S=2
-EPISODES=50
-HF_USER=oliveoil8888 
-CAMERAS="top_realsense_color top_realsense_depth wrist_right wrist_left top_webcam" 
-#total five cameras that you can include/exclude
-
-python3 record_dual_with_cameras.py --repo-id ${HF_USER}/${REPO} --task "${TASK}" --episode-time-s ${EPISODE_TIME_S} --reset-time-s ${RESET_TIME_S} --episodes ${EPISODES} --camera ${CAMERAS} --push
-#####################
-
-hf auth login
-HF_USER=oliveoil8888
-conda activate lerobot
-cd /home/kibub/kibub_operator/so101_dual_arms/
-REPO="pick-up-cup-left-overhead"
+REPO="pick-up-cup"
 TASK="Pick up the cup by the handle"
 EPISODE_TIME_S=20
 RESET_TIME_S=5
@@ -125,46 +73,31 @@ CAMERAS="top_realsense_color overhead_realsense wrist_right wrist_left"
 
 python3 record_dual_with_cameras.py --repo-id ${HF_USER}/${REPO} --task "${TASK}" --episode-time-s ${EPISODE_TIME_S} --reset-time-s ${RESET_TIME_S} --episodes ${EPISODES} --camera ${CAMERAS} --push
 ```
+
+The script outputs a link to your online dataset upon completion. you can also visit your Huggingface account page and navigate to 'Datasets'.
+
 #### Dataset tools: modifying, deleting, adding, removing, etc:
+
+*Edits huggingface dataset*
 
 Check out this link for the huggingface documentation: https://huggingface.co/docs/lerobot/en/using_dataset_tools 
 
 Quick commands for convenience:
 
 Delete certain episodes and save new dataset at indices:
+
+kibub shell:
 ```
 lerobot-edit-dataset \
-    --repo_id oliveoil8888/pick-up-cup-left-overhead-3 \
-    --new_repo_id oliveoil8888/pick-up-cup-left-overhead-4 \
+    --repo_id oliveoil8888/pick-up-cup-left-3 \
+    --new_repo_id oliveoil8888/pick-up-cup-left-4 \
     --operation.type delete_episodes \
-    --operation.episode_indices "[10]"
-
-    lerobot-edit-dataset \
-    --repo_id oliveoil8888/pick-cup-left-recoveries \
-    --new_repo_id oliveoil8888/pick-up-cup-left-recoveries \
-    --operation.type delete_episodes \
-    --operation.episode_indices "[17]"
-
-lerobot-edit-dataset \
-    --repo_id oliveoil8888/pick-place-cube-box \
-    --new_repo_id oliveoil8888/pick-place-cube-box-2 \
-    --operation.type delete_episodes \
-    --operation.episode_indices "[21,22]"
-
-lerobot-edit-dataset \
-    --repo_id oliveoil8888/pick-place-cube-cup \
-    --new_repo_id oliveoil8888/pick-place-cube-cup-1 \
-    --operation.type delete_episodes \
-    --operation.episode_indices "[8, 9, 12, 18]"
-
-lerobot-edit-dataset \
-    --repo_id oliveoil8888/pick-up-cup-jun28 \
-    --new_repo_id oliveoil8888/pick-up-cup-jun28-1 \
-    --operation.type delete_episodes \
-    --operation.episode_indices "[4,33]"
+    --operation.episode_indices "[10, 11]"
 ```
 
-After editing your dataset, you can push it to huggingface in a python interpreter with:
+After editing your dataset, you can push it to huggingface via the python script below (simply type `python` or `python3` in your terminal and paste the code below within the python interpreter). Modify the LOCAL and REPO paths:
+
+kibub shell:
 ```
 from huggingface_hub import HfApi
 
@@ -178,7 +111,6 @@ api.create_repo(
     repo_type="dataset",
     exist_ok=True,
 )
-
 
 
 for folder in ["data", "meta", "videos"]:
@@ -197,12 +129,17 @@ print("All done.")
 ```
 
 ## Train a model and save checkpoints locally:
-*Download the dataset from huggingface, then trains and saves model locally*
-cow shell:
+
+*Download the dataset from huggingface, then trains and saves checkpoints of the model locally*
+
+For instructions on training on the cluster, read agent-kibub/cluster/README.md at https://github.com/olivecai/agent-kibub/blob/main/cluster/README.md.
+
+Below is the bash terminal code to train on your local CUDA device:
+
+server shell:
 ```
-COW_USER=$(whoami)
+SERVER_USER=$(whoami)
 conda activate lerobot
-cd /home/${COW_USER}/lerobot
 REPO=pick-up-cup-left-overhead-4-2-merge
 TASK="Pick up the cup by the cup handle"
 POLICY="groot"
@@ -210,30 +147,35 @@ HF_USER=oliveoil8888
 STEPS=50000
 BATCH_SIZE=4
 
+cd;
+
 PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True #this is to avoid the cuda out of memory error
 
 #download the dataset from huggingface
-hf download ${HF_USER}/${REPO}   --repo-type dataset   --local-dir /home/${COW_USER}/.cache/huggingface/lerobot/${HF_USER}/${REPO}
+hf download ${HF_USER}/${REPO}   --repo-type dataset   --local-dir /home/${SERVER_USER}/.cache/huggingface/lerobot/${HF_USER}/${REPO}
 
 #train the model
-lerobot-train --dataset.repo_id=${HF_USER}/${REPO} --policy.type=${POLICY} --policy.base_model_path=nvidia/GR00T-N1.5-3B --policy.push_to_hub=false --output_dir=outputs/train/${POLICY}-${REPO} --job_name=job-${REPO} --policy.device=cuda --wandb.enable=true --steps=${STEPS} --batch_size=${BATCH_SIZE} --save_checkpoint=true --pretrained_path=oliveoil8888/groot-pick-up-cup-left-overhead-2
+lerobot-train --dataset.repo_id=${HF_USER}/${REPO} --policy.type=${POLICY} --policy.base_model_path=nvidia/GR00T-N1.5-3B --policy.push_to_hub=false --output_dir=agent-kibub-outputs/train/${POLICY}-${REPO} --job_name=job-${REPO} --policy.device=cuda --wandb.enable=true --steps=${STEPS} --batch_size=${BATCH_SIZE} --save_checkpoint=true
 ```
 
 ## Finetune your pretrained model:
 
-same command as training, but add --policy.pretrained_path=<whatever the path to your pretrained_model is>
+*Download the dataset from huggingface, then trains and saves checkpoints of the model locally, finetuning a pretrained policy*
 
-cow shell:
+same command as training, but add `--policy.pretrained_path=<whatever the path to your pretrained_model is>`
+
+Server shell:
 
 ```
 conda activate lerobot
-cd /home/${COW_USER}$/lerobot
 REPO="repo_name_finetuned"
 TASK="Task description"
 POLICY="groot"
 HF_USER=oliveoil8888
 STEPS=10000 # usually will be much fewer steps
 BATCH_SIZE=4
+
+cd;
 
 lerobot-train \
   --dataset.repo_id=${HF_USER}/${REPO} \
@@ -242,7 +184,7 @@ lerobot-train \
   --policy.base_model_path=nvidia/GR00T-N1.5-3B \
   --policy.pretrained_path=oliveoil8888/groot-pick-up-cup-left-arm-recoveries \
   --policy.push_to_hub=false \
-  --output_dir=outputs/train/${POLICY}-${REPO} \
+  --output_dir=agent-kibub-outputs/train/${POLICY}-${REPO} \
   --job_name=job-${REPO} \
   --policy.device=cuda \
   --wandb.enable=true \
@@ -252,24 +194,29 @@ lerobot-train \
 ```
 
 ## Push your trained model to huggingface:
+
 *Pushes last saved checkpoint onto huggingface*
-cow shell
+
+Server shell
 ```
 conda activate lerobot
-cd /home/${COW_USER}$/lerobot
+
+cd;
+
 REPO="short_and_sweet_repo_name"
 TASK="Something describing a simple task"
 POLICY="groot"
 HF_USER=oliveoil8888
 
-hf upload   ${HF_USER}/${POLICY}-${REPO} outputs/train/${POLICY}-${REPO}/checkpoints/last/pretrained_model   .   --repo-type model
+hf upload   ${HF_USER}/${POLICY}-${REPO} agent-kibub-outputs/train/${POLICY}-${REPO}/checkpoints/last/pretrained_model   .   --repo-type model
 
 # should see 'Start hashing 7 files' ...
 ```
 
 ## Inference
-*Cow GPU for policy inference, kibub streams data*
-cow shell:
+
+*Server GPU for policy inference, kibub streams data*
+Server shell:
 
 ```
 conda activate lerobot
@@ -285,17 +232,17 @@ POLICY=groot
 HF_USER=oliveoil8888
 conda activate lerobot
 
-#### The followign two commands only differ by cameras
-python -m lerobot.async_inference.robot_client     --robot.type=bi_so_follower      --robot.left_arm_config.port=/dev/follower_left      --robot.right_arm_config.port=/dev/follower_right      --task="${TASK}"      --server_address=10.145.8.86:8080      --policy_type=${POLICY}       --pretrained_name_or_path=${HF_USER}/${POLICY}-${REPO}  --policy_device=cuda       --actions_per_chunk=16     --debug_visualize_queue_size=true     --robot.id=follower     --robot.top_cameras="{ top_realsense_color: {type: opencv, index_or_path: /dev/top_realsense_color, width: 640, height: 480, fps: 30}, top_realsense_depth: {type: opencv, index_or_path: /dev/top_realsense_depth, width: 640, height: 480, fps: 30}, top_webcam: {type: opencv, index_or_path: /dev/top_webcam, width: 640, height: 480, fps: 30}}"      --robot.right_arm_config.cameras="{ wrist: {type: opencv, index_or_path: /dev/wrist_right, width: 640, height: 480, fps: 30}}"     --robot.left_arm_config.cameras="{ wrist:  {type: opencv, index_or_path: /dev/wrist_left,  width: 640, height: 480, fps: 30}}"
+## use the top realsense color
+python -m lerobot.async_inference.robot_client     --robot.type=bi_so_follower      --robot.left_arm_config.port=/dev/follower_left      --robot.right_arm_config.port=/dev/follower_right      --task="${TASK}"      --server_address=10.145.8.86:8080      --policy_type=${POLICY}       --pretrained_name_or_path=${HF_USER}/${POLICY}-${REPO}  --policy_device=cuda       --actions_per_chunk=16     --debug_visualize_queue_size=true     --robot.id=follower     --robot.top_cameras="{ top_realsense_color: {type: opencv, index_or_path: /dev/top_realsense_color, width: 640, height: 480, fps: 30} }"      --robot.right_arm_config.cameras="{ wrist: {type: opencv, index_or_path: /dev/wrist_right, width: 640, height: 480, fps: 30}}"     --robot.left_arm_config.cameras="{ wrist:  {type: opencv, index_or_path: /dev/wrist_left,  width: 640, height: 480, fps: 30}}"
 
+## use the top realsense color and the overhead realsense color
 python -m lerobot.async_inference.robot_client     --robot.type=bi_so_follower      --robot.left_arm_config.port=/dev/follower_left      --robot.right_arm_config.port=/dev/follower_right      --task="${TASK}"      --server_address=10.145.8.86:8080      --policy_type=${POLICY}       --pretrained_name_or_path=${HF_USER}/${POLICY}-${REPO}  --policy_device=cuda       --actions_per_chunk=16     --debug_visualize_queue_size=true     --robot.id=follower     --robot.top_cameras="{ top_realsense_color: {type: opencv, index_or_path: /dev/top_realsense_color, width: 640, height: 480, fps: 30}, overhead_realsense: {type: opencv, index_or_path: /dev/overhead_realsense, width: 640, height: 480, fps: 30}}"      --robot.right_arm_config.cameras="{ wrist: {type: opencv, index_or_path: /dev/wrist_right, width: 640, height: 480, fps: 30}}"     --robot.left_arm_config.cameras="{ wrist:  {type: opencv, index_or_path: /dev/wrist_left,  width: 640, height: 480, fps: 30}}"
-
 ```
 
 
 ## Modifying the lerobot code
 
-Since the lerobot fork is installed as editable on both kibub and cow, you can simply branch from main in /lerobot on either machine, make your changes, and push to your branch.
-Then, on kibub or cow, you can just pull and the changes will be reflected.
+Since the lerobot fork is installed as editable on both kibub and Server, you can simply branch from main in /lerobot on either machine, make your changes, and push to your branch.
+Then, on kibub or Server, you can just pull and the changes will be reflected.
 
 Troubleshooting: run `pip show lerobot` to ensure your lerobot fork repo is editable.
