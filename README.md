@@ -246,3 +246,7 @@ Since the lerobot fork is installed as editable on both kibub and Server, you ca
 Then, on kibub or Server, you can just pull and the changes will be reflected.
 
 Troubleshooting: run `pip show lerobot` to ensure your lerobot fork repo is editable.
+
+## Clearing up space on kibub
+
+`rm -rf `
