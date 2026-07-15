@@ -5,7 +5,6 @@ Instructions on **teleop**, **recording**, **training**, **deploying** models us
 This repository should be cloned on the **Server** at `/home/user/agent-kibub/kibub_operator` and on the **Client** at `/home/kibub/kibub_operator`.
 
 
-
 # Kibub operator 
 
 ## SSH into kibub
@@ -134,6 +133,8 @@ print("All done.")
 
 For instructions on training on the cluster, read agent-kibub/cluster/README.md at https://github.com/olivecai/agent-kibub/blob/main/cluster/README.md.
 
+For advice on training and parameters, read agent-kibub/
+
 Below is the bash terminal code to train on your local CUDA device:
 
 server shell:
@@ -225,15 +226,15 @@ python -m lerobot.async_inference.policy_server   --host=0.0.0.0   --port=8080  
 
 kibub shell: 
 ```
-REPO=pick-up-cup-left-overhead-2
-TASK="Pick up the cup by the cup handle"
+REPO=pick-up-cup-right-model
+TASK="Pick up the cup"
 
 POLICY=groot
 HF_USER=oliveoil8888
 conda activate lerobot
 
 ## use the top realsense color
-python -m lerobot.async_inference.robot_client     --robot.type=bi_so_follower      --robot.left_arm_config.port=/dev/follower_left      --robot.right_arm_config.port=/dev/follower_right      --task="${TASK}"      --server_address=10.145.8.86:8080      --policy_type=${POLICY}       --pretrained_name_or_path=${HF_USER}/${POLICY}-${REPO}  --policy_device=cuda       --actions_per_chunk=16     --debug_visualize_queue_size=true     --robot.id=follower     --robot.top_cameras="{ top_realsense_color: {type: opencv, index_or_path: /dev/top_realsense_color, width: 640, height: 480, fps: 30} }"      --robot.right_arm_config.cameras="{ wrist: {type: opencv, index_or_path: /dev/wrist_right, width: 640, height: 480, fps: 30}}"     --robot.left_arm_config.cameras="{ wrist:  {type: opencv, index_or_path: /dev/wrist_left,  width: 640, height: 480, fps: 30}}"
+python -m lerobot.async_inference.robot_client     --robot.type=bi_so_follower      --robot.left_arm_config.port=/dev/follower_left      --robot.right_arm_config.port=/dev/follower_right      --task="${TASK}"      --server_address=10.145.8.86:8080      --policy_type=${POLICY}       --pretrained_name_or_path=${HF_USER}/${REPO}  --policy_device=cuda       --actions_per_chunk=16     --debug_visualize_queue_size=true     --robot.id=follower     --robot.top_cameras="{ top_realsense_color: {type: opencv, index_or_path: /dev/top_realsense_color, width: 640, height: 480, fps: 30} }"      --robot.right_arm_config.cameras="{ wrist: {type: opencv, index_or_path: /dev/wrist_right, width: 640, height: 480, fps: 30}}"     --robot.left_arm_config.cameras="{ wrist:  {type: opencv, index_or_path: /dev/wrist_left,  width: 640, height: 480, fps: 30}}"
 
 ## use the top realsense color and the overhead realsense color
 python -m lerobot.async_inference.robot_client     --robot.type=bi_so_follower      --robot.left_arm_config.port=/dev/follower_left      --robot.right_arm_config.port=/dev/follower_right      --task="${TASK}"      --server_address=10.145.8.86:8080      --policy_type=${POLICY}       --pretrained_name_or_path=${HF_USER}/${POLICY}-${REPO}  --policy_device=cuda       --actions_per_chunk=16     --debug_visualize_queue_size=true     --robot.id=follower     --robot.top_cameras="{ top_realsense_color: {type: opencv, index_or_path: /dev/top_realsense_color, width: 640, height: 480, fps: 30}, overhead_realsense: {type: opencv, index_or_path: /dev/overhead_realsense, width: 640, height: 480, fps: 30}}"      --robot.right_arm_config.cameras="{ wrist: {type: opencv, index_or_path: /dev/wrist_right, width: 640, height: 480, fps: 30}}"     --robot.left_arm_config.cameras="{ wrist:  {type: opencv, index_or_path: /dev/wrist_left,  width: 640, height: 480, fps: 30}}"
